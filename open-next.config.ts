@@ -10,6 +10,21 @@
 import { defineCloudflareConfig } from "@opennextjs/cloudflare";
 import r2IncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache";
 
-export default defineCloudflareConfig({
-  incrementalCache: r2IncrementalCache,
-});
+export default {
+  ...defineCloudflareConfig({
+    incrementalCache: r2IncrementalCache,
+  }),
+  /**
+   * CRITICAL — breaks an infinite build recursion.
+   *
+   * By default the OpenNext adapter builds the Next.js app by re-running the
+   * package manager's `build` script (`bun run build` / `npm run build`). Our
+   * `build` script IS `opennextjs-cloudflare build`, so the default would make
+   * the build invoke itself forever (CI hangs until Workers Builds times out).
+   *
+   * `buildCommand` overrides that default and points at a Next.js-only script.
+   * The adapter injects NEXT_PRIVATE_STANDALONE=true into it, which is what
+   * makes `next build` emit the standalone output the adapter requires.
+   */
+  buildCommand: "bun run build:next",
+};
