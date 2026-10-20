@@ -22,7 +22,7 @@
 
 name = "vapetive-web"
 main = ".open-next/worker.js"
-compatibility_date = "2025-01-15"
+compatibility_date = "2026-06-15"
 compatibility_flags = [
   "nodejs_compat",
   # Populate process.env from vars/secrets synchronously so src/server/env.ts
