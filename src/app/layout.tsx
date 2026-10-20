@@ -3,7 +3,7 @@ import { Geist_Mono, Inter, Orbitron, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { SITE_SETTINGS } from "@/data/site-settings";
-import { JsonLd, organizationJsonLd, websiteJsonLd } from "@/lib/seo";
+import { SITE_ORIGIN, JsonLd, organizationJsonLd, websiteJsonLd } from "@/lib/seo";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -37,9 +37,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  // Canonical origin comes from the deployment environment; localhost is the
-  // dev-only fallback — never a hardcoded deployment hostname.
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  // Canonical origin comes from the deployment environment; production builds
+  // default to the live domain so a missing build-time variable can never bake
+  // `localhost` into metadata (single source of truth: SITE_ORIGIN in seo.tsx).
+  metadataBase: new URL(SITE_ORIGIN),
   title: {
     default: "Vapetive — #1 Vape Shop in UAE | Instant Vape Delivery Online",
     // Pipe separator keeps generated titles scannable in SERPs while the

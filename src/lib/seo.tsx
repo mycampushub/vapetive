@@ -8,12 +8,21 @@ import type { CatalogItem } from "@/types";
  * storefront ships rich results (Organization, WebSite, Product/Offer,
  * BreadcrumbList, FAQPage) without any third-party dependency.
  *
- * The canonical origin mirrors metadataBase in src/app/layout.tsx: the
- * deployment environment supplies NEXT_PUBLIC_SITE_URL, localhost is the
- * dev-only fallback and nothing is hardcoded.
+ * The canonical origin mirrors metadataBase in src/app/layout.tsx via
+ * SITE_ORIGIN below. Resolution order:
+ *  1. NEXT_PUBLIC_SITE_URL — explicit override for any deployment.
+ *  2. Production builds default to the live domain, so a missing build-time
+ *     variable can never bake `localhost` into robots.txt, the sitemap,
+ *     canonicals or JSON-LD (Cloudflare Workers Builds exports no env vars
+ *     during `next build` by default).
+ *  3. Development falls back to http://localhost:3000.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+export const SITE_ORIGIN =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.NODE_ENV === "production" ? "https://vapetive.ae" : "http://localhost:3000");
+
+const BASE_URL = SITE_ORIGIN;
 
 /** Absolute URL for a site path — used by canonicals, sitemap and JSON-LD. */
 export const siteUrl = (path = "/") => new URL(path, BASE_URL).toString();
