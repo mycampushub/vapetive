@@ -1,0 +1,265 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  BadgeCheck,
+  Bell,
+  ChevronDown,
+  Files,
+  Gauge,
+  LifeBuoy,
+  Menu,
+  Package,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  ShoppingBag,
+  Tags,
+  Users,
+  UsersRound,
+  X,
+} from "lucide-react";
+import { Logo } from "@/components/layout/logo";
+import { variants } from "@/lib/motion";
+import { cn } from "@/lib/utils";
+
+interface AdminNavEntry {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+interface AdminNavGroup {
+  label: string;
+  entries: AdminNavEntry[];
+}
+
+export const ADMIN_NAV: AdminNavGroup[] = [
+  {
+    label: "Overview",
+    entries: [{ label: "Dashboard", href: "/admin", icon: Gauge }],
+  },
+  {
+    label: "Catalog",
+    entries: [
+      { label: "Products", href: "/admin/catalog/products", icon: Package },
+      { label: "Categories", href: "/admin/catalog/categories", icon: Tags },
+      { label: "Brands", href: "/admin/catalog/brands", icon: BadgeCheck },
+    ],
+  },
+  {
+    label: "Media",
+    entries: [{ label: "Media library", href: "/admin/media", icon: Files }],
+  },
+  {
+    label: "People",
+    entries: [
+      { label: "Customers", href: "/admin/customers", icon: UsersRound },
+      { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
+      { label: "Support", href: "/admin/support", icon: LifeBuoy },
+    ],
+  },
+  {
+    label: "System",
+    entries: [
+      { label: "Settings", href: "/admin/settings", icon: Settings },
+      { label: "Users", href: "/admin/users", icon: Users },
+      { label: "Roles", href: "/admin/roles", icon: ShieldCheck },
+      { label: "Audit log", href: "/admin/audit-log", icon: ScrollText },
+    ],
+  },
+];
+
+function isActive(pathname: string, href: string) {
+  return href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function NavList({ onNavigate, variant }: { onNavigate?: () => void; variant: "sidebar" | "drawer" }) {
+  const pathname = usePathname();
+  // Variant-scoped layoutId: a shared id across BOTH mounted NavLists
+  // (desktop sidebar + mobile drawer) makes the active pill teleport
+  // between them when the drawer opens.
+  const layoutId = `admin-nav-active-${variant}`;
+  return (
+    <nav aria-label="Admin sections" className="flex-1 space-y-6 overflow-y-auto px-3 py-2">
+      {ADMIN_NAV.map((group) => (
+        <div key={group.label}>
+          <p className="px-3 pb-2 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground/70">{group.label}</p>
+          <ul className="space-y-0.5">
+            {group.entries.map((entry) => {
+              const active = isActive(pathname, entry.href);
+              return (
+                <li key={entry.href}>
+                  <Link
+                    href={entry.href}
+                    onClick={onNavigate}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "relative flex min-h-10 items-center gap-3 rounded-lg px-3 text-[0.86rem] font-medium transition-colors",
+                      active
+                        ? "bg-violet-glow/14 text-foreground"
+                        : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                    )}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId={layoutId}
+                        className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-gradient-to-b from-violet-glow to-ice"
+                        transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                        aria-hidden="true"
+                      />
+                    )}
+                    <entry.icon className={cn("size-[1.05rem] shrink-0", active && "text-violet-soft")} aria-hidden="true" />
+                    {entry.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex h-16 items-center gap-3 border-b border-line px-5">
+        <Logo compact />
+        <div className="leading-tight">
+          <p className="font-display text-sm font-bold tracking-[0.24em] text-foreground">VAPETIVE</p>
+          <p className="text-[0.62rem] uppercase tracking-[0.2em] text-violet-soft">Control room</p>
+        </div>
+      </div>
+      <NavList onNavigate={onNavigate} variant="sidebar" />
+      <div className="border-t border-line p-4">
+        <p className="text-[0.68rem] leading-relaxed text-muted-foreground/80">
+          Live operations console — every figure reads from the operational database in real time.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * AdminShell — calm, information-dense admin frame.
+ * Desktop: collapsible fixed sidebar. Mobile: drawer + top bar.
+ */
+export function AdminShell({ children }: { children: React.ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
+
+  const crumbs = ["Admin", ...pathname.split("/").filter(Boolean).slice(1)];
+
+  return (
+    <div className="flex min-h-screen bg-background">
+      {/* Desktop sidebar */}
+      <aside
+        aria-label="Admin sidebar"
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 hidden border-r border-line bg-abyss/90 backdrop-blur-xl transition-[width] duration-300 lg:block",
+          collapsed ? "w-[4.5rem]" : "w-64"
+        )}
+      >
+        <SidebarInner onNavigate={() => undefined} />
+      </aside>
+
+      {/* Mobile drawer */}
+      <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>
+        <AnimatePresence>
+          {mobileOpen && (
+            <Dialog.Portal forceMount>
+              <Dialog.Overlay asChild forceMount>
+                <motion.div variants={variants.backdrop} initial="hidden" animate="visible" exit="exit" className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" />
+              </Dialog.Overlay>
+              <Dialog.Content asChild forceMount aria-label="Admin menu">
+                <motion.div
+                  variants={variants.drawerLeft}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  className="fixed inset-y-0 left-0 z-[70] w-[min(19rem,88vw)] overflow-hidden rounded-r-3xl border-r border-line bg-abyss focus:outline-none"
+                >
+                  {/* Radix requires an accessible title/description for the
+                      dialog — kept visually hidden, the nav is the content. */}
+                  <Dialog.Title className="sr-only">Admin menu</Dialog.Title>
+                  <Dialog.Description className="sr-only">Admin sections navigation</Dialog.Description>
+                  <NavList onNavigate={() => setMobileOpen(false)} variant="drawer" />
+                  <Dialog.Close aria-label="Close admin menu" className="absolute right-4 top-4 inline-flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-white/5 hover:text-foreground">
+                    <X className="size-5" aria-hidden="true" />
+                  </Dialog.Close>
+                </motion.div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          )}
+        </AnimatePresence>
+      </Dialog.Root>
+
+      {/* Main column */}
+      <div className={cn("flex min-h-screen w-full flex-col transition-[padding] duration-300", collapsed ? "lg:pl-[4.5rem]" : "lg:pl-64")}>
+        {/* Topbar */}
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-abyss/85 px-4 backdrop-blur-xl sm:px-6">
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open admin menu"
+            className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground lg:hidden"
+          >
+            <Menu className="size-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!collapsed}
+            className="hidden size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground lg:inline-flex"
+          >
+            <ChevronDown className={cn("size-5 rotate-90 transition-transform duration-300", collapsed && "-rotate-90")} aria-hidden="true" />
+          </button>
+
+          <nav aria-label="Breadcrumb" className="min-w-0">
+            <ol className="flex items-center gap-1.5 text-[0.8rem] text-muted-foreground">
+              {crumbs.map((c, i) => (
+                <li key={i} className="flex items-center gap-1.5">
+                  {i > 0 && <span className="opacity-40" aria-hidden="true">/</span>}
+                  <span className={cn("truncate capitalize", i === crumbs.length - 1 && "text-foreground")}>{c || "Dashboard"}</span>
+                </li>
+              ))}
+            </ol>
+          </nav>
+
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Notifications (planned)"
+              className="relative inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground"
+              title="Notifications — planned"
+            >
+              <Bell className="size-[1.1rem]" aria-hidden="true" />
+              <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-violet-soft" aria-hidden="true" />
+              <span className="sr-only">Notifications inbox is planned.</span>
+            </button>
+            <div className="flex items-center gap-2.5 rounded-full border border-line py-1 pl-1 pr-3">
+              <span className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-glow to-ice text-[0.7rem] font-bold text-white">NQ</span>
+              <span className="hidden text-sm font-medium text-foreground sm:block">Nour Q.</span>
+            </div>
+          </div>
+        </header>
+
+        <main id="admin-main" className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          {children}
+        </main>
+
+        <footer className="border-t border-line px-4 py-4 text-[0.72rem] text-muted-foreground/70 sm:px-6">
+          VAPETIVE admin · staff session · RBAC enforced server-side
+        </footer>
+      </div>
+    </div>
+  );
+}

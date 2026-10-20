@@ -1,0 +1,401 @@
+/**
+ * VAPETIVE — Frontend domain types.
+ *
+ * These models describe everything the UI renders. During the frontend
+ * phase every value is served from mock adapters (src/services/*) backed
+ * by typed mock data (src/data/*). The shapes are designed so a future
+ * Cloudflare D1 + R2 backend can implement the same contracts.
+ */
+
+/* ----------------------------- Site ------------------------------- */
+
+export interface SiteSettings {
+  brandName: string;
+  brandLegalName: string;
+  tagline: string;
+  description: string;
+  locale: string;
+  currency: string;
+  contact: {
+    email: string;
+    supportEmail: string;
+    phone: string;
+    whatsapp?: string;
+    addressLines: string[];
+    hours: string;
+  };
+  social: Array<{ id: string; label: string; href: string }>;
+  seo: { titleTemplate: string; defaultDescription: string };
+  complianceNotice: string;
+  ageRestrictionNotice: string;
+  smokePreset: "ambient" | "cinematic" | "reduced";
+  animationIntensity: number; // 0..1 — admin-configurable
+}
+
+export interface NavigationItem {
+  id: string;
+  label: string;
+  href: string;
+  description?: string;
+  icon?: string;
+  badge?: string;
+  children?: NavigationItem[];
+  sortOrder: number;
+  enabled: boolean;
+  location: "header" | "footer-column-1" | "footer-column-2" | "footer-column-3" | "mobile" | "legal";
+}
+
+/* ---------------------------- Catalog ----------------------------- */
+
+export type Availability = "in_stock" | "low_stock" | "out_of_stock" | "unavailable";
+
+export interface SpecificationEntry {
+  label: string;
+  value: string;
+}
+
+export interface SpecificationGroup {
+  title: string;
+  entries: SpecificationEntry[];
+}
+
+export interface ItemVariant {
+  id: string;
+  label: string;
+  type: "flavor" | "color" | "capacity" | "nicotine";
+  swatch?: string;
+  available: boolean;
+  meta?: string;
+  /** Price delta vs the base product price, in AED (fils-derived). */
+  priceDelta?: number;
+}
+
+export interface ConformityInfo {
+  label: string;
+  detail?: string;
+  status: "verified" | "pending" | "missing";
+}
+
+export interface DocumentRef {
+  id: string;
+  title: string;
+  type: "pdf" | "web";
+  href?: string;
+  note?: string;
+}
+
+export interface CatalogCategory {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  longDescription?: string;
+  image?: string;
+  itemCount: number;
+  featured?: boolean;
+  accent: "violet" | "ice" | "magenta";
+}
+
+/**
+ * A vapor brand stocked at the VAPETIVE shop. VAPETIVE itself is the
+ * storefront, not a device maker — every device/liquid record belongs
+ * to one of these brands and lives at /brand/<slug>.
+ */
+export interface Brand {
+  id: string;
+  slug: string;
+  name: string;
+  /** Short LED-chip line used on tiles and headers. */
+  tagline: string;
+  /** One-liner for cards/chips. */
+  blurb: string;
+  /** Longer paragraph for the brand landing page. */
+  description: string;
+  origin: string;
+  established: string;
+  accent: "violet" | "ice" | "magenta";
+  featured?: boolean;
+}
+
+export interface CatalogItem {
+  id: string;
+  slug: string;
+  name: string;
+  brand: string;
+  categorySlug: string;
+  sku: string;
+  model?: string;
+  tagline: string;
+  description: string;
+  /** Price in AED (whole dirhams in the mock catalog). */
+  price: number;
+  /** Optional original price — renders as a strikethrough "was" price. */
+  compareAtPrice?: number;
+  images: string[];
+  specs: SpecificationGroup[];
+  variants: ItemVariant[];
+  compatibility?: string[];
+  origin?: string;
+  conformity: ConformityInfo[];
+  warnings: string[];
+  documents: DocumentRef[];
+  availability: Availability;
+  featured?: boolean;
+  isNew?: boolean;
+  nicotineStrength?: string;
+  /** UAE law: nicotine products are 18+; accessories (coils, cables) may not be. */
+  ageRestricted: boolean;
+  faqs?: Array<{ question: string; answer: string }>;
+  relatedSlugs?: string[];
+}
+
+/* ----------------------------- Media ------------------------------ */
+
+export interface MediaAsset {
+  id: string;
+  name: string;
+  type: "image" | "video" | "document";
+  format: string;
+  sizeLabel: string;
+  dimensions?: string;
+  folder: string;
+  uploadedAt: string;
+  alt?: string;
+  url: string;
+  status: "ready" | "processing" | "failed";
+}
+
+/* ---------------------------- Account ----------------------------- */
+
+export interface UserProfile {
+  id: string;
+  displayName: string;
+  email: string;
+  phone?: string;
+  joinedAt: string;
+  initials: string;
+  verification: "verified" | "unverified" | "pending";
+  locale: string;
+}
+
+export interface AccountPreferences {
+  language: string;
+  communications: {
+    productUpdates: boolean;
+    orderUpdates: boolean;
+    researchInvites: boolean;
+  };
+  privacy: {
+    personalization: boolean;
+    analytics: boolean;
+  };
+  accessibility: {
+    reducedMotion: boolean;
+  };
+}
+
+export interface SavedItem {
+  itemId: string;
+  savedAt: string;
+  note?: string;
+}
+
+/* ----------------------------- Orders ----------------------------- */
+
+export type OrderStatus =
+  | "placed"
+  | "confirmed"
+  | "processing"
+  | "packed"
+  | "shipped"
+  | "delivered"
+  | "cancelled";
+
+export interface OrderItemPreview {
+  name: string;
+  quantity: number;
+}
+
+export interface OrderSummary {
+  reference: string;
+  placedAt: string;
+  status: OrderStatus;
+  itemCount: number;
+  itemsPreview: OrderItemPreview[];
+  totalLabel: string;
+  fulfilmentLabel: string;
+}
+
+export interface TimelineEvent {
+  id: string;
+  label: string;
+  at: string;
+  completed: boolean;
+  note?: string;
+}
+
+/* ------------------------------ Cart ------------------------------ */
+
+/** A raw cart line as stored in the in-memory cart store. */
+export interface CartLine {
+  productSlug: string;
+  /** Selected variant id, or null when the product has no variants. */
+  variantId: string | null;
+  qty: number;
+}
+
+/** A cart line resolved against the catalog. Stale lines are dropped. */
+export interface CartLineDetail {
+  /** Stable line key — `${productSlug}:${variantId ?? "-"}`. */
+  key: string;
+  product: CatalogItem;
+  variant: ItemVariant | null;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+  /** Unavailable products/variants are shown but excluded from totals. */
+  blocked: boolean;
+  blockedReason?: string;
+}
+
+export interface CartTotals {
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  /** Total unit count across purchasable (non-blocked) lines. */
+  itemCount: number;
+}
+
+export interface CartDetail {
+  lines: CartLineDetail[];
+  totals: CartTotals;
+  hasBlocked: boolean;
+}
+
+export type DeliveryMethod = "standard" | "express";
+export type PaymentMethod = "cash-on-delivery" | "card-on-delivery" | "saved-card";
+
+export interface OrderDetail {
+  reference: string;
+  placedAt: string;
+  status: OrderStatus;
+  timeline: TimelineEvent[];
+  items: Array<{
+    name: string;
+    brand: string;
+    quantity: number;
+    variantLabel?: string;
+    lineTotalLabel: string;
+    image?: string;
+  }>;
+  statusHistory: Array<{ status: OrderStatus; at: string; note?: string }>;
+  supportHref: string;
+  documents: DocumentRef[];
+  deliveryLabel: string;
+  paymentLabel: string;
+  totalLabel: string;
+}
+
+/* ----------------------------- Support ---------------------------- */
+
+export type TicketStatus = "open" | "pending" | "resolved" | "closed";
+export type TicketPriority = "low" | "normal" | "high" | "urgent";
+
+export interface TicketMessage {
+  id: string;
+  author: string;
+  role: "customer" | "agent" | "system";
+  body: string;
+  at: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  reference: string;
+  subject: string;
+  category: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  createdAt: string;
+  updatedAt: string;
+  requester: string;
+  messages: TicketMessage[];
+  internalNotes?: Array<{ id: string; author: string; body: string; at: string }>;
+}
+
+/* ----------------------------- Legal ------------------------------ */
+
+export interface LegalDocumentSection {
+  id: string;
+  heading: string;
+  paragraphs: string[];
+  list?: string[];
+}
+
+export interface LegalDocument {
+  slug: string;
+  title: string;
+  effectiveDate: string;
+  lastUpdated: string;
+  version: string;
+  summary: string;
+  sections: LegalDocumentSection[];
+}
+
+export interface ComplianceRecord {
+  id: string;
+  area: string;
+  title: string;
+  description: string;
+  status: "verified" | "pending" | "missing" | "expired";
+  lastReviewed?: string;
+  expiresAt?: string;
+  owner?: string;
+  documents: DocumentRef[];
+}
+
+/* ----------------------------- Admin ------------------------------ */
+
+export interface AdminRole {
+  id: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  members: number;
+  system: boolean;
+}
+
+export type AuditSeverity = "info" | "warning" | "critical";
+
+export interface AuditEvent {
+  id: string;
+  at: string;
+  actor: string;
+  action: string;
+  target: string;
+  severity: AuditSeverity;
+  detail: string;
+  ip?: string;
+}
+
+export interface AdminCustomer {
+  id: string;
+  name: string;
+  email: string;
+  status: "active" | "suspended" | "pending";
+  joinedAt: string;
+  ordersCount: number;
+  privacyRequest?: "access" | "deletion" | null;
+  supportTickets: number;
+}
+
+/* ---------------------------- Services ---------------------------- */
+
+/** Unified list response so future D1-backed adapters can paginate. */
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}

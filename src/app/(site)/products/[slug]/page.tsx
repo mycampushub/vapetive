@@ -1,0 +1,233 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { TriangleAlert } from "lucide-react";
+import { PageContainer } from "@/components/layout/page-container";
+import { Breadcrumbs, type BreadcrumbItem } from "@/components/layout/breadcrumbs";
+import { ItemGallery } from "@/components/shared/item-gallery";
+import { InformationAccordion, type AccordionPanel } from "@/components/shared/information-accordion";
+import { SpecificationList } from "@/components/shared/specification-list";
+import { AvailabilityBadge } from "@/components/shared/status-badge";
+import { ItemGrid } from "@/components/shared/item-grid";
+import { getBrands, getCategoryBySlugRepo, getProductBySlug, getProducts } from "@/server/data";
+import { formatAED } from "@/lib/utils";
+import { breadcrumbJsonLd, canonical, faqJsonLd, JsonLd, productJsonLd } from "@/lib/seo";
+import { ProductOrderActions } from "./product-order-actions";
+import { ProductSaveButton } from "./product-save-button";
+
+interface ProductPageProps {
+  params: Promise<{ slug: string }>;
+}
+
+export async function generateStaticParams() {
+  return (await getProducts()).map((item) => ({ slug: item.slug }));
+}
+
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const item = await getProductBySlug(slug);
+  if (!item) return { title: "Product not found", robots: { index: false, follow: false } };
+  return {
+    title: `${item.name} \u2014 ${item.tagline}`,
+    description: item.description,
+    keywords: [item.name, item.brand, `${item.name} UAE`, `${item.brand} Dubai`, "buy vape online UAE"],
+    ...canonical(`/products/${item.slug}`),
+  };
+}
+
+export default async function ProductPage({ params }: ProductPageProps) {
+  const { slug } = await params;
+  const item = await getProductBySlug(slug);
+  if (!item) notFound();
+
+  const [category, brand, related] = await Promise.all([
+    getCategoryBySlugRepo(item.categorySlug),
+    // brandByName equivalent — resolve by (case-insensitive) brand name.
+    getBrands().then((brands) =>
+      brands.find((candidate) => candidate.name.toLowerCase() === item.brand.toLowerCase()) ?? null,
+    ),
+    Promise.all(
+      (item.relatedSlugs ?? []).map((relatedSlug) => getProductBySlug(relatedSlug)),
+    ).then((entries) =>
+      entries.filter((relatedItem): relatedItem is NonNullable<typeof relatedItem> => Boolean(relatedItem)),
+    ),
+  ]);
+
+  const crumbs: BreadcrumbItem[] = [
+    { label: "Home", href: "/" },
+    { label: "Collections", href: "/collections" },
+  ];
+  if (category) crumbs.push({ label: category.name, href: `/collections/${category.slug}` });
+  crumbs.push({ label: item.name });
+
+  // Rich-result graphs: Product/Offer + the visible breadcrumb trail
+  // (+ FAQPage when the listing carries its own questions).
+  const structuredData = [
+    productJsonLd(item, brand?.name),
+    breadcrumbJsonLd(crumbs),
+    ...(item.faqs?.length ? [faqJsonLd(item.faqs)] : []),
+  ];
+
+  const panels: AccordionPanel[] = [
+    {
+      id: "description",
+      title: "Description",
+      content: <p>{item.description}</p>,
+    },
+    {
+      id: "specifications",
+      title: "Specifications",
+      content: <SpecificationList groups={item.specs} />,
+    },
+    ...(item.faqs?.length
+      ? [
+          {
+            id: "faqs",
+            title: "Frequently asked questions",
+            content: (
+              <div className="space-y-5">
+                {item.faqs.map((faq) => (
+                  <div key={faq.question}>
+                    <h4 className="font-display text-[0.92rem] font-semibold text-foreground">{faq.question}</h4>
+                    <p className="mt-1.5">{faq.answer}</p>
+                  </div>
+                ))}
+              </div>
+            ),
+          } satisfies AccordionPanel,
+        ]
+      : []),
+  ];
+
+  return (
+    // Extra bottom padding keeps the fixed MobileSummary from obscuring content on small screens.
+    <div className="pb-28 md:pb-0">
+      <JsonLd data={structuredData} />
+      <PageContainer>
+        <div className="pt-6">
+          <Breadcrumbs items={crumbs} />
+        </div>
+
+        <div className="grid gap-10 pt-8 lg:grid-cols-2">
+          {/* Gallery */}
+          <div>
+            <ItemGallery images={item.images} name={item.name} />
+          </div>
+
+          {/* Info column */}
+          <div className="flex flex-col gap-5">
+            {/* Brand chip — a real link when the brand resolves in the
+                directory; an inert label otherwise (never href="#"). */}
+            {brand ? (
+              <Link
+                href={`/brand/${brand.slug}`}
+                aria-label={`View all ${brand.name} products`}
+                className="inline-flex items-center gap-2 self-start rounded-full border border-violet-glow/40 bg-white/[0.03] px-3.5 py-1.5 text-label font-medium uppercase tracking-[0.22em] text-violet-soft transition-colors hover:border-violet-glow/70"
+              >
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 shrink-0 rounded-full bg-violet-soft"
+                  style={{ boxShadow: "0 0 8px 2px rgba(167,139,250,0.7)" }}
+                />
+                {item.brand}
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-2 self-start rounded-full border border-line bg-white/[0.03] px-3.5 py-1.5 text-label font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 shrink-0 rounded-full bg-violet-soft"
+                  style={{ boxShadow: "0 0 8px 2px rgba(167,139,250,0.7)" }}
+                />
+                {item.brand}
+              </span>
+            )}
+            <h1 className="text-h1 font-bold">{item.name}</h1>
+            <p className="text-lead text-muted-foreground">{item.tagline}</p>
+
+            {/* Price — formatted AED with optional strikethrough "was" price */}
+            <div className="flex flex-wrap items-baseline gap-3" aria-label={`Price ${formatAED(item.price)}`}>
+              <span className="font-display text-3xl font-bold tracking-tight text-foreground">
+                {formatAED(item.price)}
+              </span>
+              {item.compareAtPrice !== undefined && (
+                <>
+                  <span className="text-lg text-muted-foreground line-through decoration-error/60">
+                    {formatAED(item.compareAtPrice)}
+                  </span>
+                  <span className="rounded-full border border-success/35 bg-success/10 px-2.5 py-1 text-[0.72rem] font-semibold text-success">
+                    Save {formatAED(item.compareAtPrice - item.price)}
+                  </span>
+                </>
+              )}
+            </div>
+
+            <p className="font-mono text-meta uppercase tracking-[0.08em] text-muted-foreground">
+              SKU {item.sku}
+              {item.model ? (
+                <>
+                  {" \u00b7 "}
+                  Model {item.model}
+                </>
+              ) : null}
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <AvailabilityBadge availability={item.availability} />
+              {item.nicotineStrength && (
+                <span className="inline-flex items-center rounded-full border border-line px-2.5 py-1 text-[0.72rem] font-medium tracking-wide text-muted-foreground">
+                  {item.nicotineStrength}
+                </span>
+              )}
+              {item.ageRestricted && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 px-2.5 py-1 text-[0.72rem] font-medium tracking-wide text-warning">
+                  <TriangleAlert className="size-3.5" aria-hidden="true" />
+                  18+ · Adults only
+                </span>
+              )}
+              <ProductSaveButton itemId={item.id} name={item.name} />
+            </div>
+
+            <ProductOrderActions item={item} />
+          </div>
+        </div>
+
+        {/* Product details */}
+        <section id="product-details" aria-labelledby="product-details-heading" className="scroll-mt-24 pt-16">
+          <h2 id="product-details-heading" className="text-h2 font-bold">
+            Product details
+          </h2>
+          <p className="max-w-2xl pt-3 text-muted-foreground">
+            The full listing for {item.name} — description, technical specifications and buying information. Expand a
+            panel to read it.
+          </p>
+          <div className="pt-6">
+            <InformationAccordion panels={panels} defaultOpen="description" />
+          </div>
+        </section>
+
+        {/* Related */}
+        {related.length > 0 && (
+          <section aria-labelledby="related-heading" className="pb-16 pt-16">
+            <h2 id="related-heading" className="text-h2 font-bold">
+              Related products
+            </h2>
+            <p className="max-w-2xl pt-3 text-muted-foreground">
+              Other products commonly viewed alongside {item.name} — from the same brand and collection.
+            </p>
+            <div className="pt-8">
+              <ItemGrid items={related} columns={4} />
+            </div>
+            <div className="pt-10">
+              <Link
+                href="/discover"
+                className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-5 text-sm text-muted-foreground transition-colors hover:border-violet-glow/50 hover:text-foreground"
+              >
+                Browse the full range
+              </Link>
+            </div>
+          </section>
+        )}
+      </PageContainer>
+    </div>
+  );
+}

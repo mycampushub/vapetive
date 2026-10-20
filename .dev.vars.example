@@ -1,0 +1,15 @@
+# VAPETIVE — local secrets for `wrangler dev` (bun run cf:preview).
+# Copy to `.dev.vars` (gitignored — never commit) and fill in.
+#
+# APP_ENV=preview keeps plain cookie names over local HTTP; production uses
+# __Host- prefixed Secure cookies automatically (src/server/env.ts).
+
+APP_ENV=preview
+SESSION_SIGNING_KEY=change-me-to-a-long-random-string
+
+# Optional integrations — each feature degrades gracefully when unset:
+# TURNSTILE_SECRET_KEY=
+# STRIPE_SECRET_KEY=
+# STRIPE_WEBHOOK_SECRET=
+# RESEND_API_KEY=
+# CONTACT_NOTIFY_EMAIL=ops@vapetive.ae
