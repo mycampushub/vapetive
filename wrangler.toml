@@ -23,7 +23,7 @@
 # Full runbook: docs/CLOUDFLARE-DEPLOYMENT.md
 # ============================================================================
 
-name = "vapetive-web"
+name = "vapetive"
 main = ".open-next/worker.js"
 compatibility_date = "2026-06-15"
 compatibility_flags = [
