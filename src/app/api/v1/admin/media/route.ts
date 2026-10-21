@@ -71,12 +71,14 @@ export const POST = withApi(
     let url: string;
     let r2Key: string;
     if (r2) {
-      // Workers path: stream through the R2 MEDIA binding.
-      const key = `media/${folder}/${fileName}`;
+      // Workers path: stream through the R2 MEDIA binding. Keys are
+      // `<folder>/<fileName>`; the public GET route mirrors the same key
+      // space (src/app/api/v1/media/[...key]/route.ts).
+      const key = `${folder}/${fileName}`;
       await r2.put(key, file.stream(), {
         httpMetadata: { contentType: mime },
       });
-      url = `/cdn-cgi/media/${key}`;
+      url = `/api/v1/media/${folder}/${fileName}`;
       r2Key = key;
     } else {
       // Local sandbox path: persist under public/uploads.

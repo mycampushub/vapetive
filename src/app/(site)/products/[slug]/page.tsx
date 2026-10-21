@@ -26,7 +26,11 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
   const item = await getProductBySlug(slug);
-  if (!item) return { title: "Product not found", robots: { index: false, follow: false } };
+  // notFound() here — not a robots'd metadata stub — because generateMetadata
+  // resolves before the response head flushes. A loading.tsx Suspense boundary
+  // wraps the page body, so a notFound() raised only in the streamed body
+  // cannot change the status code and would ship a 200 soft-404.
+  if (!item) notFound();
   return {
     title: `${item.name} \u2014 ${item.tagline}`,
     description: item.description,

@@ -63,6 +63,10 @@ export interface MediaR2Like {
     value: ReadableStream | ArrayBuffer | string,
     options?: { httpMetadata?: { contentType?: string } }
   ): Promise<unknown>;
+  /** Public reads for uploaded assets (src/app/api/v1/media/[...key]). */
+  get?(
+    key: string
+  ): Promise<{ body: ReadableStream; httpMetadata?: { contentType?: string } } | null>;
 }
 
 /** Minimal structural type for the D1 binding surface we use. */

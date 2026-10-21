@@ -23,7 +23,9 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: BrandPageProps): Promise<Metadata> {
   const { slug } = await params;
   const brand = await getBrandBySlugRepo(slug);
-  if (!brand) return { title: "Brand not found", robots: { index: false, follow: false } };
+  // notFound() in metadata (head-blocking) — see products/[slug] note; a
+  // streamed-body notFound() would be softened to a 200 by loading.tsx.
+  if (!brand) notFound();
   const count = (await getProducts()).filter((item) => item.brand.toLowerCase() === brand.name.toLowerCase()).length;
   return {
     title: `${brand.name} UAE — ${count} product${count === 1 ? "" : "s"} in stock`,

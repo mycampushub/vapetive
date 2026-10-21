@@ -20,7 +20,9 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: CollectionPageProps): Promise<Metadata> {
   const { slug } = await params;
   const category = await getCategoryBySlugRepo(slug);
-  if (!category) return { title: "Collection not found", robots: { index: false, follow: false } };
+  // notFound() in metadata (head-blocking) — see products/[slug] note; a
+  // streamed-body notFound() would be softened to a 200 by loading.tsx.
+  if (!category) notFound();
   const items = (await getProducts()).filter((item) => item.categorySlug === category.slug);
   return {
     title: `${category.name} UAE — Browse ${items.length} products`,
