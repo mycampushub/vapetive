@@ -67,3 +67,7 @@ worker-configuration.d.ts
 /upload/
 /download/
 /agent-ctx/
+
+# generated D1/KV seed artifacts (embed admin password hash — regenerate before apply)
+/scripts/seed-d1.sql
+/scripts/seed-kv/

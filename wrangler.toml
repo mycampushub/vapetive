@@ -16,6 +16,9 @@
 #   bunx wrangler secret put RESEND_API_KEY          (transactional email)
 #   bunx wrangler secret put TURNSTILE_SECRET_KEY    (form protection)
 #   bun run db:migrate:remote                        (apply migrations to D1)
+#   bun run db:seed:export                           (local seeded DB -> scripts/seed-d1.sql + seed-kv/)
+#   bun run db:seed:remote                           (apply seed SQL to production D1)
+#   bun run db:seed:kv:remote                        (site settings -> Workers KV namespace)
 #
 # Full runbook: docs/CLOUDFLARE-DEPLOYMENT.md
 # ============================================================================
