@@ -15,7 +15,21 @@ import { hasPermission } from "@/server/rbac";
  * `features.maintenance` flag is on, non-staff visitors get the offline
  * notice instead of storefront pages. Staff keep full access, and the
  * admin console lives outside this layout so it always stays reachable.
+ *
+ * Render the ENTIRE public site dynamically (per request).
+ *
+ * Why: header nav, footer columns, homepage sections, FAQ and legal bodies
+ * all read D1/KV. If this segment were statically prerendered, pages would
+ * bake whatever database the BUILD machine happened to have — a CI runner's
+ * auto-migrated empty db/vapetive.db produces the exact "menu items and
+ * homepage products/brands/collections missing" defect seen in production,
+ * and even a seeded build freezes content until the next deploy (products
+ * added from the admin console would never appear). Dynamic rendering makes
+ * the build machine's DB state irrelevant and admin edits visible instantly;
+ * on Workers the D1/KV reads are co-located and sub-millisecond.
  */
+export const dynamic = "force-dynamic";
+
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const flags = await getFeatureFlags();
   if (flags.maintenance) {
