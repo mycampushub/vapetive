@@ -12,7 +12,7 @@
  */
 
 import { APP_ENV, D1DatabaseLike } from "@/server/env";
-import { getLocalDb, type LocalDb } from "@/server/db/local";
+import type { LocalDb } from "@/server/db/local";
 import { injectWorkerBindings } from "@/server/bindings";
 
 export interface DbRow {
@@ -107,6 +107,10 @@ export async function getDb(): Promise<DbClient> {
     if (d1) {
       cached = new D1Client(d1);
     } else {
+      // Lazy on purpose: the local SQLite driver (node:fs / bun:sqlite) must
+      // never be evaluated on the Worker boot path. On Workers the D1 binding
+      // always exists, so this dynamic import is only reached in local dev.
+      const { getLocalDb } = await import("@/server/db/local");
       const local = await getLocalDb();
       cached = new LocalClient(local);
     }

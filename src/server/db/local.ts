@@ -41,22 +41,59 @@ const MIGRATIONS_DIR = path.join(process.cwd(), "migrations");
 let instance: SqliteDatabase | null = null;
 let migrationsApplied = false;
 
-/** Runtime-adaptive open: bun:sqlite under Bun, node:sqlite under Node. */
+/**
+ * Runtime-adaptive open: bun:sqlite under Bun, node:sqlite under Node.
+ *
+ * Loaded via `process.getBuiltinModule` (Bun ≥1.1 / Node ≥22.3) — a plain
+ * runtime API call, NOT an `import()` expression. This is deliberate: every
+ * import() form in this module is unbuildable for the Worker target —
+ *   • a literal specifier (`import("bun:sqlite")`) gets const-folded by
+ *     Turbopack into the server chunks, and OpenNext's esbuild step (running
+ *     under Node, targeting workerd) then fails with
+ *     `Could not resolve "bun:sqlite"`;
+ *   • a variable specifier (`import(spec)`) hard-fails `next build` with
+ *     "Module not found" because Turbopack cannot analyze dynamic requests.
+ * `getBuiltinModule` is invisible to both bundlers, resolved by the actual
+ * runtime, and only ever called when this local fallback executes — which on
+ * Workers it never does (client.ts loads this driver only when the D1
+ * binding is absent).
+ */
 async function openDatabase(file: string): Promise<SqliteDatabase> {
-  const isBun =
-    typeof process !== "undefined" &&
-    Boolean((process.versions as unknown as Record<string, string | undefined>)?.bun);
+  const versions = (process.versions ?? {}) as unknown as Record<
+    string,
+    string | undefined
+  >;
+  const flavor = versions.bun ? "bun" : "node";
+  const spec = `${flavor}:sqlite`;
 
-  if (isBun) {
-    const spec = "bun:sqlite";
-    const mod = (await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ spec)) as {
-      Database: new (path: string) => SqliteDatabase;
-    };
+  const getBuiltin = (
+    process as unknown as { getBuiltinModule?: (id: string) => unknown }
+  ).getBuiltinModule;
+  if (typeof getBuiltin !== "function") {
+    throw new Error(
+      `Local SQLite requires process.getBuiltinModule (Bun >= 1.1 or Node >= 22.3) to load "${spec}". ` +
+        `Workers use the D1 binding instead and never load this driver.`
+    );
+  }
+
+  let loaded: unknown;
+  try {
+    loaded = getBuiltin.call(process, spec);
+  } catch {
+    loaded = undefined;
+  }
+  if (!loaded) {
+    throw new Error(
+      `Runtime "${flavor}" does not provide the "${spec}" builtin module.`
+    );
+  }
+
+  if (flavor === "bun") {
+    const mod = loaded as { Database: new (path: string) => SqliteDatabase };
     return new mod.Database(file);
   }
 
-  const spec = "node:sqlite";
-  const mod = (await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ spec)) as {
+  const mod = loaded as {
     DatabaseSync: new (path: string) => SqliteDatabase;
   };
   return new mod.DatabaseSync(file);

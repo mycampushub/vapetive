@@ -10,7 +10,7 @@
 import { defineCloudflareConfig } from "@opennextjs/cloudflare";
 import r2IncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache";
 
-export default {
+const openNextConfig = {
   ...defineCloudflareConfig({
     incrementalCache: r2IncrementalCache,
   }),
@@ -28,3 +28,5 @@ export default {
    */
   buildCommand: "bun run build:next",
 };
+
+export default openNextConfig;
