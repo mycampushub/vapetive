@@ -12,14 +12,14 @@
     "db:seed": "bun scripts/seed.ts",
     "db:seed:reset": "bun scripts/seed.ts --reset",
     "db:seed:export": "bun scripts/export-d1-seed.ts",
-    "db:seed:remote": "wrangler d1 execute DB --remote --file scripts/seed-d1.sql",
+    "db:seed:remote": "bunx wrangler d1 execute DB --remote --file scripts/seed-d1.sql",
     "db:seed:kv:remote": "bun scripts/kv-remote.ts --remote",
-    "db:migrate": "wrangler d1 migrations apply DB --local",
-    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "db:migrate": "bunx wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "bunx wrangler d1 migrations apply DB --remote",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf:typegen": "wrangler types"
+    "cf:typegen": "bunx wrangler types"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",
