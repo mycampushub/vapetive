@@ -3,8 +3,9 @@
  *
  * Standalone (no project imports) so it can run anywhere Bun runs — including
  * machines where only wrangler is authenticated. Mirrors the exact algorithm
- * of src/server/password.ts (PBKDF2-SHA256, 600k iterations, 32-byte key,
- * PHC-style string `pbkdf2$sha256$<iterations>$<salt-b64>$<hash-b64>`).
+ * of src/server/password.ts (PBKDF2-SHA256, 50k iterations — see that file
+ * for why it is not 600k, PHC-style string
+ * `pbkdf2$sha256$<iterations>$<salt-b64>$<hash-b64>`).
  *
  * ── Mode 1: VERIFY (diagnose) ──────────────────────────────────────────────
  * Checks a candidate password against a stored hash. The hash can come from
@@ -35,9 +36,13 @@
  * "admin@vapetive.example".
  */
 
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
-const ITERATIONS = 600_000;
+// MUST stay in sync with src/server/password.ts — 50k keeps deriveBits under
+// Cloudflare Workers' free-plan CPU budget (10 ms); 600k throws on Workers
+// and made every production sign-in fail (see that file for the full story).
+const ITERATIONS = 50_000;
 const KEY_LENGTH = 32;
 const DEFAULT_EMAIL = "admin@vapetive.example";
 const DEFAULT_PASSWORD = "Admin#Vapetive2025";
@@ -224,6 +229,9 @@ async function runSet(args: Args, password: string, email: string): Promise<void
   ].join("\n");
 
   const outPath = "db/set-admin-password.sql";
+  // The db/ folder is gitignored and does not exist in a fresh clone
+  // (ENOENT on Windows otherwise).
+  mkdirSync(path.dirname(outPath), { recursive: true });
   writeFileSync(outPath, sql, { mode: 0o600 });
   console.log(`✓ wrote ${outPath}`);
   console.log(`  email    : ${email}`);
