@@ -25,8 +25,8 @@ type DiscoverEntry = {
 
 /** Configurable wayfinding entries for the homepage discover grid. */
 const HOME_DISCOVER_ITEMS: DiscoverEntry[] = [
-  { title: "Shop all vapes", body: "The full range — disposables, pods, kits and e-liquids.", href: "/discover", icon: Compass },
-  { title: "All brands", body: "Explore the leading vape names we stock.", href: "/brand", icon: Sparkles },
+  { title: "Shop all sticks", body: "The full heat-not-burn range across every origin line.", href: "/discover", icon: Compass },
+  { title: "All brands", body: "Explore the brands we stock.", href: "/brand", icon: Sparkles },
   { title: "Safety & warnings", body: "Nicotine guidance, battery care and responsible use.", href: "/safety", icon: ShieldAlert },
   { title: "Compliance centre", body: "Conformity records and notification identifiers.", href: "/compliance", icon: FileCheck2 },
   { title: "Help & support", body: "Delivery windows, order help and device care.", href: "/help", icon: LifeBuoy },
@@ -54,7 +54,7 @@ export function DiscoverSection() {
           {/* Same pill CTA recipe as the other homepage section headers. */}
           <Link
             href="/discover"
-            className="group inline-flex items-center gap-2 rounded-full border border-line-strong bg-white/[0.03] px-5 py-2.5 text-sm font-medium text-foreground shadow-[0_0_12px_rgba(139,92,246,0.12)] transition-all hover:border-violet-glow/55 hover:shadow-[0_0_20px_rgba(139,92,246,0.35)]"
+            className="group inline-flex items-center gap-2 rounded-full border border-line-strong bg-foreground/[0.03] px-5 py-2.5 text-sm font-medium text-foreground shadow-[0_0_12px_rgba(139,92,246,0.12)] transition-all hover:border-violet-glow/55 hover:shadow-[0_0_20px_rgba(139,92,246,0.35)]"
           >
             View all
             <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />

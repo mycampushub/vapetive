@@ -15,7 +15,7 @@ export function OrderItemImage({ src, alt, className }: { src?: string; alt: str
   return (
     <span
       className={cn(
-        "relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-white/[0.03]",
+        "relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-foreground/[0.03]",
         className
       )}
     >

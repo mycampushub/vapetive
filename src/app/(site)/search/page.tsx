@@ -7,7 +7,7 @@ import { SearchView } from "./search-view";
 export const metadata: Metadata = {
   robots: { index: false, follow: true },
   title: "Search",
-  description: "Search the VAPETIVE catalog — devices, e-liquids, coils and accessories, with live suggestions.",
+  description: "Search the VAPETIVE catalog — heat-not-burn tobacco sticks and accessories, with live suggestions.",
 };
 
 export default function SearchPage() {

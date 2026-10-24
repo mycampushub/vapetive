@@ -24,7 +24,7 @@ const TIMELINE: Array<{ year: string; title: string; body: string }> = [
   {
     year: "2022",
     title: "The brand wall comes together",
-    body: "A handful of trusted labels grows into a curated wall of the UAE's most-wanted brands — from Al Fakher Vape and Elf Bar to Tugboat, HQD and VGOD Stig — kept in stock at our Dubai warehouse.",
+    body: "The catalog sharpens into a single focused line — IQOS ILUMA heat-not-burn tobacco sticks across the multi-origin, Indonesia and Japan flavour families — kept in stock at our Dubai warehouse.",
   },
   {
     year: "2023",
@@ -82,9 +82,9 @@ export default async function AboutPage() {
           <h2 className="sr-only">Who we are</h2>
           <p className="leading-relaxed text-foreground/90">
             VAPETIVE is operated by {settings.brandLegalName}, a Dubai-registered trading company founded in 2021.
-            We don&apos;t manufacture devices — we curate them. The most requested vape brands in the UAE,
-            from the shisha heritage of Al Fakher to the disposable icons of Elf Bar and Lost Mary, stocked under one
-            neon-lit roof.
+            We don&apos;t manufacture what we stock — we curate it. Heat-not-burn tobacco sticks
+            made for IQOS ILUMA, from smooth toasted tobaccos to cooling menthols and click-capsule
+            Pearl editions, stocked under one neon-lit roof.
           </p>
           <p className="leading-relaxed text-foreground/90">
             Every listing in this shop is authenticity-checked against the brand&apos;s own security features
@@ -123,7 +123,7 @@ export default async function AboutPage() {
             <RevealSection as="li" key={item.title} delay={i * 0.06}>
               <div className="flex items-start gap-4 rounded-2xl border border-line bg-elevated/50 p-5 sm:p-6">
                 <span
-                  className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-white/[0.04] text-violet-soft"
+                  className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-foreground/[0.04] text-violet-soft"
                   aria-hidden="true"
                 >
                   <FileCheck2 className="size-[1.1rem]" />
@@ -146,7 +146,7 @@ export default async function AboutPage() {
         <RevealSection className="max-w-prose">
           <h2 className="font-display text-h3 font-semibold text-foreground">How we got here</h2>
         </RevealSection>
-        <ol className="relative mt-8 max-w-prose space-y-10 before:absolute before:inset-y-2 before:left-[7px] before:w-px before:bg-white/10">
+        <ol className="relative mt-8 max-w-prose space-y-10 before:absolute before:inset-y-2 before:left-[7px] before:w-px before:bg-foreground/10">
           {TIMELINE.map((entry, i) => (
             <RevealSection as="li" key={entry.year} delay={i * 0.05} className="relative pl-10">
               <span

@@ -86,15 +86,15 @@ export function MediaPicker({
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by file name or alt text…"
             aria-label="Search the media library"
-            className="h-10 w-full rounded-xl border border-line bg-white/[0.03] pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-violet-glow/50 focus:outline-none"
+            className="h-10 w-full rounded-xl border border-line bg-foreground/[0.03] pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-violet-glow/50 focus:outline-none"
           />
         </div>
 
-        <div className="max-h-80 min-h-40 overflow-y-auto rounded-xl border border-line bg-white/[0.01] p-3 [scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin]">
+        <div className="max-h-80 min-h-40 overflow-y-auto rounded-xl border border-line bg-foreground/[0.01] p-3 [scrollbar-color:rgba(127,127,127,0.45)_transparent] [scrollbar-width:thin]">
           {loading ? (
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4" aria-hidden="true">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="aspect-square animate-pulse rounded-xl bg-white/[0.05]" />
+                <div key={i} className="aspect-square animate-pulse rounded-xl bg-foreground/[0.05]" />
               ))}
             </div>
           ) : error ? (
@@ -120,7 +120,7 @@ export function MediaPicker({
                       type="button"
                       onClick={() => pick(asset)}
                       title={asset.name}
-                      className="group w-full rounded-xl border border-line bg-white/[0.02] p-1.5 text-left transition-colors hover:border-violet-glow/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-glow/50"
+                      className="group w-full rounded-xl border border-line bg-foreground/[0.02] p-1.5 text-left transition-colors hover:border-violet-glow/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-glow/50"
                     >
                       <span className="relative block aspect-square overflow-hidden rounded-lg bg-black/30">
                         {broken ? (

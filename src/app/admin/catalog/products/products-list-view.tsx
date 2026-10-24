@@ -50,10 +50,10 @@ function statusBadge(product: AdminProductSummary) {
 function TableSkeleton() {
   return (
     <div aria-hidden="true" className="overflow-hidden rounded-2xl border border-line">
-      <div className="h-11 border-b border-line bg-white/[0.02]" />
+      <div className="h-11 border-b border-line bg-foreground/[0.02]" />
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="border-b border-line/60 px-4 py-4 last:border-0">
-          <div className="h-4 w-full max-w-md animate-pulse rounded bg-white/[0.05]" />
+          <div className="h-4 w-full max-w-md animate-pulse rounded bg-foreground/[0.05]" />
         </div>
       ))}
     </div>
@@ -387,7 +387,7 @@ export function ProductsListView() {
             <Link
               href={`/admin/catalog/products/${row.id}`}
               aria-label={`Edit ${row.name}`}
-              className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground"
+              className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
             >
               <Pencil className="size-4" aria-hidden="true" />
             </Link>

@@ -95,8 +95,8 @@ export function BrandCollectionSection({ BRANDS, CATALOG_ITEMS }: { BRANDS: Bran
                 </motion.h2>
 
                 <motion.p variants={item} className="mt-5 max-w-lg text-[0.95rem] leading-relaxed text-muted-foreground">
-                  The names UAE vapers reach for — Al Fakher, Elf Bar, Lost
-                  Mary, Geek Bar, Vozol, Tugboat and more — stocked in one
+                  The name UAE adult nicotine users reach for — IQOS ILUMA
+                  heat-not-burn sticks stocked in one
                   place, authenticated unit by unit and priced in AED.
                 </motion.p>
 
@@ -110,7 +110,7 @@ export function BrandCollectionSection({ BRANDS, CATALOG_ITEMS }: { BRANDS: Bran
                   </Link>
                   <Link
                     href="/collections"
-                    className="rounded-full border border-line-strong bg-white/[0.03] px-6 py-3 text-sm font-medium uppercase tracking-[0.08em] text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.08]"
+                    className="rounded-full border border-line-strong bg-foreground/[0.03] px-6 py-3 text-sm font-medium uppercase tracking-[0.08em] text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.08]"
                   >
                     Shop collections
                   </Link>
@@ -128,7 +128,7 @@ export function BrandCollectionSection({ BRANDS, CATALOG_ITEMS }: { BRANDS: Bran
                       <Link
                         href={`/brand/${brand.slug}`}
                         aria-label={`${brand.name} — ${count} ${count === 1 ? "product" : "products"} listed`}
-                        className="block rounded-xl border border-line bg-white/[0.03] px-3 py-2.5 transition-colors hover:border-violet-glow/50 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-glow/60"
+                        className="block rounded-xl border border-line bg-foreground/[0.03] px-3 py-2.5 transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-glow/60"
                       >
                         <span
                           className={`block font-neon text-[0.72rem] font-bold uppercase leading-snug ${BRAND_ACCENT_TEXT[brand.accent]}`}

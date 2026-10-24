@@ -33,7 +33,7 @@ function MessageBubble({ author, role, body, at }: { author: string; role: "cust
   if (role === "system") {
     return (
       <li className="py-1 text-center">
-        <p className="mx-auto inline-block rounded-full border border-line bg-white/[0.03] px-3 py-1 text-[0.72rem] text-muted-foreground">
+        <p className="mx-auto inline-block rounded-full border border-line bg-foreground/[0.03] px-3 py-1 text-[0.72rem] text-muted-foreground">
           {body} · {formatDateTime(at)}
         </p>
       </li>

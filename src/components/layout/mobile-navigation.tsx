@@ -6,6 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { Logo } from "./logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { variants } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { NavigationItem } from "@/types";
@@ -65,14 +66,17 @@ export function MobileNavigation({
                 <Dialog.Description className="sr-only">Site sections navigation</Dialog.Description>
                 <div className="flex items-center justify-between px-5 py-4">
                   <Logo />
-                  <Dialog.Close
-                    aria-label="Close menu"
-                    className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                      <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
-                  </Dialog.Close>
+                  <div className="flex items-center gap-1">
+                    <ThemeToggle />
+                    <Dialog.Close
+                      aria-label="Close menu"
+                      className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </Dialog.Close>
+                  </div>
                 </div>
 
                 <nav aria-label="Site sections" className="flex flex-1 flex-col gap-7 px-5 pb-10">
@@ -87,7 +91,7 @@ export function MobileNavigation({
                               "flex min-h-12 items-center justify-between rounded-xl px-4 text-[0.95rem] font-medium transition-colors",
                               isActive(item.href)
                                 ? "bg-violet-glow/15 text-foreground"
-                                : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                             )}
                           >
                             {item.label}
@@ -105,7 +109,7 @@ export function MobileNavigation({
                           <li key={item.id}>
                             <Link
                               href={item.href}
-                              className="flex min-h-11 items-center rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                              className="flex min-h-11 items-center rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
                             >
                               {item.label}
                             </Link>

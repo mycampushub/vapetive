@@ -36,9 +36,9 @@ function StaffStatusCell({ status }: { status: string }) {
 function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <div className="space-y-2.5" aria-hidden="true">
-      <div className="skeleton-sheen h-11 rounded-xl border border-line bg-white/[0.02]" />
+      <div className="skeleton-sheen h-11 rounded-xl border border-line bg-foreground/[0.02]" />
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="skeleton-sheen h-14 rounded-xl border border-line bg-white/[0.02]" />
+        <div key={i} className="skeleton-sheen h-14 rounded-xl border border-line bg-foreground/[0.02]" />
       ))}
     </div>
   );
@@ -216,7 +216,7 @@ function TempPasswordDialog({
             later.
           </DialogDescription>
         </DialogHeader>
-        <div className="rounded-2xl border border-line bg-white/[0.03] p-4">
+        <div className="rounded-2xl border border-line bg-foreground/[0.03] p-4">
           <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Password</p>
           <p className="mt-1.5 select-all break-all font-mono text-base text-foreground">{payload?.tempPassword}</p>
         </div>

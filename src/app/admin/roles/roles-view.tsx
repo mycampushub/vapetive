@@ -14,7 +14,7 @@ function RoleCardSkeleton() {
   return (
     <div className="grid gap-4 lg:grid-cols-2" aria-hidden="true">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="skeleton-sheen h-52 rounded-2xl border border-line bg-white/[0.02]" />
+        <div key={i} className="skeleton-sheen h-52 rounded-2xl border border-line bg-foreground/[0.02]" />
       ))}
     </div>
   );
@@ -25,7 +25,7 @@ function RoleCard({ role }: { role: AdminRole }) {
     <article className="flex flex-col rounded-2xl border border-line bg-elevated/40 p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-white/[0.03]">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-foreground/[0.03]">
             <ShieldCheck className={cn("size-5", role.system ? "text-violet-soft" : "text-muted-foreground")} aria-hidden="true" />
           </span>
           <div>
@@ -45,7 +45,7 @@ function RoleCard({ role }: { role: AdminRole }) {
         {role.permissions.map((perm) => (
           <code
             key={perm}
-            className="rounded-md border border-line bg-white/[0.04] px-2 py-1 font-mono text-[0.7rem] text-foreground/90"
+            className="rounded-md border border-line bg-foreground/[0.04] px-2 py-1 font-mono text-[0.7rem] text-foreground/90"
           >
             {perm}
           </code>
@@ -124,9 +124,9 @@ export function RolesView({ initialRoles }: { initialRoles: AdminRole[] }) {
           ))}
 
           {/* Add-role card */}
-          <div className="flex flex-col items-start justify-center gap-3 rounded-2xl border border-dashed border-line-strong bg-white/[0.015] p-5">
+          <div className="flex flex-col items-start justify-center gap-3 rounded-2xl border border-dashed border-line-strong bg-foreground/[0.015] p-5">
             <div className="flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-xl border border-line bg-white/[0.03]">
+              <span className="flex size-10 items-center justify-center rounded-xl border border-line bg-foreground/[0.03]">
                 <Plus className="size-5 text-muted-foreground" aria-hidden="true" />
               </span>
               <h2 className="font-display text-[1.02rem] font-semibold text-foreground">Add a role</h2>

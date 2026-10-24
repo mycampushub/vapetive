@@ -102,10 +102,10 @@ function statusDot(asset: MediaAsset) {
 function TableSkeleton() {
   return (
     <div aria-hidden="true" className="overflow-hidden rounded-2xl border border-line">
-      <div className="h-11 border-b border-line bg-white/[0.02]" />
+      <div className="h-11 border-b border-line bg-foreground/[0.02]" />
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="border-b border-line/60 px-4 py-4 last:border-0">
-          <div className="h-4 w-full max-w-md animate-pulse rounded bg-white/[0.05]" />
+          <div className="h-4 w-full max-w-md animate-pulse rounded bg-foreground/[0.05]" />
         </div>
       ))}
     </div>
@@ -182,7 +182,7 @@ function AssetMenu({
               setOpen(false);
               onCopy(asset);
             }}
-            className="flex min-h-10 w-full items-center gap-2.5 px-3.5 text-left text-[0.84rem] text-foreground transition-colors hover:bg-white/[0.05]"
+            className="flex min-h-10 w-full items-center gap-2.5 px-3.5 text-left text-[0.84rem] text-foreground transition-colors hover:bg-foreground/[0.05]"
           >
             <Copy className="size-4 text-muted-foreground" aria-hidden="true" />
             Copy URL
@@ -458,7 +458,7 @@ export function MediaLibraryView() {
       <PrototypeNotice>The library reads live records from the media database. Uploads are stored on the server in local development mode — object storage (R2) lands with the cloud deployment.</PrototypeNotice>
 
       {/* Upload dropzone */}
-      <div className="rounded-2xl border border-dashed border-line-strong bg-white/[0.02] px-6 py-7 text-center">
+      <div className="rounded-2xl border border-dashed border-line-strong bg-foreground/[0.02] px-6 py-7 text-center">
         <UploadCloud className="mx-auto size-6 text-violet-soft" aria-hidden="true" />
         <p className="mt-2.5 font-display text-[0.98rem] font-semibold text-foreground">Upload to the library</p>
         <p className="mx-auto mt-1 max-w-md text-[0.8rem] leading-relaxed text-muted-foreground">
@@ -566,7 +566,7 @@ export function MediaLibraryView() {
                         aria-label={`Preview ${asset.name}`}
                         className="group w-full rounded-2xl border border-line bg-elevated/40 p-3 text-left transition-colors hover:border-violet-glow/40"
                       >
-                        <div className="relative aspect-square overflow-hidden rounded-xl border border-line bg-white/[0.02]">
+                        <div className="relative aspect-square overflow-hidden rounded-xl border border-line bg-foreground/[0.02]">
                           {asset.type === "image" && !thumbFailed ? (
                             <Image
                               src={asset.url}
@@ -667,7 +667,7 @@ export function MediaLibraryView() {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-white/[0.02]">
+              <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-foreground/[0.02]">
                 {selected.type === "image" && !failedThumbs.has(selected.id) ? (
                   <Image
                     src={selected.url}

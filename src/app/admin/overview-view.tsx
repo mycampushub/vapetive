@@ -104,7 +104,7 @@ export function OverviewView() {
               className="group flex items-center justify-between gap-4 rounded-2xl border border-line bg-elevated/50 p-5 transition-colors hover:border-violet-glow/40"
             >
               <span className="flex items-start gap-3.5">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-white/[0.03]">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-foreground/[0.03]">
                   <action.icon className="size-[1.1rem] text-violet-soft" aria-hidden="true" />
                 </span>
                 <span>

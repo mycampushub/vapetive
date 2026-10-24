@@ -37,8 +37,8 @@ export function BrandIntroSection() {
             />
             <p className="mt-6 text-[0.95rem] leading-relaxed text-muted-foreground">
               Vapetive runs on a simple promise: place your order and it
-              leaves our Dubai warehouse the same day. Authentic devices,
-              genuine e-liquids, honest AED pricing — no grey imports and no
+              leaves our Dubai warehouse the same day. Authentic sticks,
+              honest AED pricing — no grey imports and no
               surprises at the door.
             </p>
             <p className="mt-4 text-[0.95rem] leading-relaxed text-muted-foreground">

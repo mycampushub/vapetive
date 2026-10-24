@@ -82,9 +82,17 @@ export function SmokeTexture({
         width,
         height: height ?? "auto",
         aspectRatio: asset === "column" ? "768 / 1344" : "1200 / 686",
-        opacity: reduced ? Math.min(opacity, 0.2) : opacity,
+        // Opacity routes through --smoke-opacity-scale (1 dark / 0.45 light)
+        // so the daylight theme can quiet the multiply wash WITHOUT the
+        // component reading the theme in render — a theme-dependent render
+        // value here caused hydration mismatches (next-themes resolves the
+        // stored theme on the client's first render, the server can't).
+        opacity: `calc(${reduced ? Math.min(opacity, 0.2) : opacity} * var(--smoke-opacity-scale, 1))`,
         filter: blur > 0 ? `blur(${blur}px)` : undefined,
-        mixBlendMode: "screen",
+        // Blend/tint route through CSS vars so the light theme can flip
+        // smoke from additive "screen" (dark rooms) to "multiply" washes
+        // (daylight) without touching presets. Casts: csstype has no var().
+        mixBlendMode: "var(--smoke-blend, screen)" as React.CSSProperties["mixBlendMode"],
         transform: `translate(-50%, -50%) ${flipX ? "scaleX(-1)" : ""} ${flipY ? "scaleY(-1)" : ""}`.trim(),
         animationPlayState: reduced || !visible ? "paused" : "running",
         ["--dur" as string]: `${duration}s`,
@@ -97,7 +105,7 @@ export function SmokeTexture({
       <div
         className="absolute inset-0"
         style={{
-          backgroundColor: color ?? "#ffffff",
+          backgroundColor: (color ?? "var(--smoke-tint, #ffffff)") as React.CSSProperties["backgroundColor"],
           WebkitMaskImage: `url("${ASSET_SRC[asset]}")`,
           WebkitMaskSize: "contain",
           WebkitMaskPosition: "center",

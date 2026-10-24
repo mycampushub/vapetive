@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Inter, Orbitron, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { SITE_ORIGIN, JsonLd, organizationJsonLd, websiteJsonLd } from "@/lib/seo";
 
@@ -66,23 +67,14 @@ export const metadata: Metadata = {
     "buy vape online UAE",
     "instant vape delivery UAE",
     "same day vape delivery Dubai",
-    "disposable vape UAE",
-    "e-liquid Dubai",
-    "pod systems UAE",
-    "nicotine salt e-liquid",
+    "heat not burn UAE",
+    "IQOS ILUMA UAE",
+    "IQOS ILUMA sticks Dubai",
+    "tobacco sticks UAE",
+    "heat-not-burn tobacco",
+    "IQOS ILUMA delivery Dubai",
+    "IQOS ILUMA flavours",
     "vape delivery UAE",
-    "Elf Bar UAE",
-    "Lost Mary UAE",
-    "Geek Bar UAE",
-    "Al Fakher vape",
-    "Tugboat vape Dubai",
-    "HQD Cuvie UAE",
-    "Vozol vape",
-    "Yuoto vape",
-    "Fummo vape",
-    "Maskking vape",
-    "VGOD Stig UAE",
-    "Silvaper vape",
     "vape AED price",
     "authentic vape UAE",
     "Vapetive",
@@ -146,7 +138,11 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-        {children}
+        {/* ThemeProvider owns the html.light/dark class for the whole app
+            (storefront + admin); default stays the dark brand palette. */}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
         <Toaster />
         {/* Site-wide structured data: Organisation + WebSite/SearchAction. */}
         <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />

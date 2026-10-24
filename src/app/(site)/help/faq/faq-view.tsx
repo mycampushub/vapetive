@@ -74,7 +74,7 @@ export function FaqView({
       "min-h-11 rounded-full border px-3.5 text-[0.8rem] font-medium transition-colors",
       active
         ? "border-violet-glow/60 bg-violet-glow/10 text-violet-soft"
-        : "border-line bg-white/[0.03] text-muted-foreground hover:text-foreground",
+        : "border-line bg-foreground/[0.03] text-muted-foreground hover:text-foreground",
     );
 
   return (
@@ -94,7 +94,7 @@ export function FaqView({
                     "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-[0.85rem] transition-colors",
                     category === c
                       ? "bg-violet-glow/10 text-foreground"
-                      : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+                      : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
                   )}
                 >
                   <span>{c === "All" ? "All questions" : c}</span>

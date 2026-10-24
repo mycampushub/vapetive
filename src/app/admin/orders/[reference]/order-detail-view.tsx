@@ -109,7 +109,7 @@ function OrderStatusControl({ reference, currentStatus }: { reference: string; c
         aria-label="Next order status"
         value={next}
         onChange={(e) => setNext(e.target.value as OrderStatus)}
-        className="min-h-9 rounded-xl border border-line bg-white/[0.04] px-3 text-[0.82rem] text-foreground outline-none focus:border-violet-soft/60"
+        className="min-h-9 rounded-xl border border-line bg-foreground/[0.04] px-3 text-[0.82rem] text-foreground outline-none focus:border-violet-soft/60"
       >
         <option value="">Update status…</option>
         {options.map((option) => (
@@ -124,14 +124,14 @@ function OrderStatusControl({ reference, currentStatus }: { reference: string; c
           placeholder="Reason (optional)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="min-h-9 w-44 rounded-xl border border-line bg-white/[0.04] px-3 text-[0.82rem] text-foreground outline-none placeholder:text-muted-foreground focus:border-violet-soft/60"
+          className="min-h-9 w-44 rounded-xl border border-line bg-foreground/[0.04] px-3 text-[0.82rem] text-foreground outline-none placeholder:text-muted-foreground focus:border-violet-soft/60"
         />
       )}
       <button
         type="button"
         onClick={apply}
         disabled={!next || busy}
-        className="min-h-9 rounded-xl bg-violet-soft px-3.5 text-[0.82rem] font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        className="min-h-9 rounded-xl bg-violet-soft px-3.5 text-[0.82rem] font-semibold text-ink transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {busy ? "Applying…" : "Apply"}
       </button>
@@ -161,7 +161,7 @@ function CustomerSection({ detail }: { detail: OrderDetail }) {
     >
       <div className="grid gap-4 sm:grid-cols-2">
         {customer && (
-          <div className="rounded-2xl border border-line bg-white/[0.02] p-4">
+          <div className="rounded-2xl border border-line bg-foreground/[0.02] p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span
@@ -199,7 +199,7 @@ function CustomerSection({ detail }: { detail: OrderDetail }) {
         )}
 
         {shippingAddress && (
-          <div className="rounded-2xl border border-line bg-white/[0.02] p-4">
+          <div className="rounded-2xl border border-line bg-foreground/[0.02] p-4">
             <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Shipping address
             </p>
@@ -319,7 +319,7 @@ export function OrderDetailView({ summary, detail }: { summary: OrderSummary; de
 
           {/* Items */}
           <FormSection title={`Items (${detail.items.length})`} description="Line items as recorded on the order.">
-            <ul className="divide-y divide-line rounded-2xl border border-line bg-white/[0.02]">
+            <ul className="divide-y divide-line rounded-2xl border border-line bg-foreground/[0.02]">
               {detail.items.map((item) => (
                 <li key={`${item.name}-${item.variantLabel ?? ""}`} className="flex items-center gap-4 p-4">
                   <ItemImage src={item.image} alt={item.name} />
@@ -345,7 +345,7 @@ export function OrderDetailView({ summary, detail }: { summary: OrderSummary; de
               <table className="w-full text-left text-sm">
                 <caption className="sr-only">Order status history</caption>
                 <thead>
-                  <tr className="border-b border-line bg-white/[0.02]">
+                  <tr className="border-b border-line bg-foreground/[0.02]">
                     <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">Status</th>
                     <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">When</th>
                     <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">Note</th>

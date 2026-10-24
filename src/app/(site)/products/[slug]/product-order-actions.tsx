@@ -71,7 +71,7 @@ export function ProductOrderActions({ item }: { item: CatalogItem }) {
             onClick={buyNow}
             disabled={!canOrder}
             className={cn(
-              "inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full border border-line-strong px-6 text-sm font-semibold text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.04]",
+              "inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full border border-line-strong px-6 text-sm font-semibold text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.04]",
               !canOrder && "pointer-events-none opacity-50"
             )}
           >

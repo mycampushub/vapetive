@@ -13,7 +13,7 @@ export const SITE_SETTINGS: SiteSettings = {
   brandLegalName: "Vapetive Trading L.L.C.",
   tagline: "The UAE's #1 vape shop for instant online delivery",
   description:
-    "Vapetive is the UAE's #1 vape shop for instant online delivery. Shop authentic disposable vapes, pod systems and e-liquids with transparent AED pricing, age-verified UAE-wide delivery and same-day dispatch from Dubai.",
+    "Vapetive is the UAE's #1 shop for instant online delivery. Shop authentic heat-not-burn tobacco sticks made for IQOS ILUMA with transparent AED pricing, age-verified UAE-wide delivery and same-day dispatch from Dubai.",
   locale: "en-AE",
   currency: "AED",
   contact: {
@@ -32,7 +32,7 @@ export const SITE_SETTINGS: SiteSettings = {
   seo: {
     titleTemplate: "%s — VAPETIVE",
     defaultDescription:
-      "Vapetive is the UAE's #1 vape shop for instant online delivery. Authentic disposable vapes, pod systems and e-liquids, transparent AED pricing and age-verified UAE-wide delivery from Dubai.",
+      "Vapetive is the UAE's #1 shop for instant online delivery. Authentic heat-not-burn tobacco sticks made for IQOS ILUMA, transparent AED pricing and age-verified UAE-wide delivery from Dubai.",
   },
   complianceNotice:
     "This website sells to adult audiences only. Nicotine products are not for sale to persons under 18 — every delivery is age-verified with a valid Emirates ID at the door. Orders are paid by cash or card on delivery.",

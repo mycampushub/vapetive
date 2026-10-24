@@ -34,14 +34,14 @@ export default function NotFound() {
           </Link>
           <Link
             href="/discover"
-            className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong px-6 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.04]"
+            className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong px-6 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.04]"
           >
             <Compass className="size-4" aria-hidden="true" />
             Discover Vapetive
           </Link>
           <Link
             href="/help"
-            className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong px-6 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.04]"
+            className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line-strong px-6 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.04]"
           >
             <LifeBuoy className="size-4" aria-hidden="true" />
             Help centre

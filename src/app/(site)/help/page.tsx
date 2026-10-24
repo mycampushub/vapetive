@@ -122,7 +122,7 @@ export default async function HelpPage() {
             className="group flex items-center gap-4 rounded-2xl border border-line bg-elevated/50 p-5 transition-colors hover:border-violet-glow/40 sm:p-6"
           >
             <span
-              className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-line bg-white/[0.04] text-violet-soft"
+              className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-line bg-foreground/[0.04] text-violet-soft"
               aria-hidden="true"
             >
               <Search className="size-5" />

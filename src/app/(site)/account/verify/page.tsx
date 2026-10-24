@@ -35,7 +35,7 @@ export default function VerifyPage() {
     <AccountPage title="Verify your identity" layout="center" centerWidth="lg">
       <div className="glass rounded-3xl p-6 shadow-2xl shadow-violet-glow/5 sm:p-8">
         <div className="flex flex-col items-center gap-3 text-center">
-          <span className="flex size-12 items-center justify-center rounded-2xl border border-line bg-white/[0.04] text-violet-soft">
+          <span className="flex size-12 items-center justify-center rounded-2xl border border-line bg-foreground/[0.04] text-violet-soft">
             <ScanFace className="size-6" aria-hidden="true" />
           </span>
           <h1 className="font-display text-h2 font-bold text-foreground">Verify your identity</h1>
@@ -52,9 +52,9 @@ export default function VerifyPage() {
             return (
               <li
                 key={step.id}
-                className="flex items-start gap-4 rounded-2xl border border-line bg-white/[0.02] p-4"
+                className="flex items-start gap-4 rounded-2xl border border-line bg-foreground/[0.02] p-4"
               >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-white/[0.04] text-violet-soft">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-foreground/[0.04] text-violet-soft">
                   <Icon className="size-5" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -76,7 +76,7 @@ export default function VerifyPage() {
         {/* Disabled upload dropzone */}
         <div
           aria-disabled="true"
-          className="mt-6 flex cursor-not-allowed flex-col items-center gap-3 rounded-2xl border border-dashed border-line-strong bg-white/[0.02] px-6 py-10 text-center"
+          className="mt-6 flex cursor-not-allowed flex-col items-center gap-3 rounded-2xl border border-dashed border-line-strong bg-foreground/[0.02] px-6 py-10 text-center"
         >
           <UploadCloud className="size-8 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm font-medium text-foreground">ID document upload</p>

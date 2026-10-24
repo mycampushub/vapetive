@@ -27,7 +27,7 @@ function ContactRow({
   return (
     <div className="flex items-start gap-3.5">
       <span
-        className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-line bg-white/[0.04] text-violet-soft"
+        className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-line bg-foreground/[0.04] text-violet-soft"
         aria-hidden="true"
       >
         <Icon className="size-4" />
@@ -100,7 +100,7 @@ export default async function ContactPage() {
                           href={item.href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex min-h-9 items-center rounded-full border border-line bg-white/[0.03] px-3.5 text-[0.8rem] text-foreground transition-colors hover:border-violet-glow/40"
+                          className="inline-flex min-h-9 items-center rounded-full border border-line bg-foreground/[0.03] px-3.5 text-[0.8rem] text-foreground transition-colors hover:border-violet-glow/40"
                         >
                           {item.label}
                         </a>

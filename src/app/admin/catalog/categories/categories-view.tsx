@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Tags, Trash2 } from "lucide-react";
+import { Pencil, Plus, Tags, Trash2 } from "lucide-react";
 import { adminService } from "@/services/admin";
 import { catalogService } from "@/services/catalog";
-import { DataTable, FormSection, type Column } from "@/components/shared/admin-primitives";
+import { DataTable, type Column } from "@/components/shared/admin-primitives";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import {
@@ -17,8 +17,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FormField, Select, TextInput } from "@/components/forms/fields";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { FormField, Select, TextArea, TextInput } from "@/components/forms/fields";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { CatalogCategory } from "@/types";
@@ -40,13 +49,179 @@ const ACCENT_OPTIONS: Array<{ value: CatalogCategory["accent"]; label: string }>
 function TableSkeleton() {
   return (
     <div aria-hidden="true" className="overflow-hidden rounded-2xl border border-line">
-      <div className="h-11 border-b border-line bg-white/[0.02]" />
+      <div className="h-11 border-b border-line bg-foreground/[0.02]" />
       {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="border-b border-line/60 px-4 py-4 last:border-0">
-          <div className="h-4 w-full max-w-sm animate-pulse rounded bg-white/[0.05]" />
+          <div className="h-4 w-full max-w-sm animate-pulse rounded bg-foreground/[0.05]" />
         </div>
       ))}
     </div>
+  );
+}
+
+/* -------------------------- category form -------------------------- */
+
+type CategoryFormMode = { kind: "create" } | { kind: "edit"; category: CatalogCategory };
+
+/** Patch shape accepted by PATCH /api/v1/admin/categories/:id (longDescription is nullable). */
+type CategoryPatch = Partial<Pick<CatalogCategory, "name" | "description" | "accent" | "featured"> & { longDescription?: string | null }>;
+
+/**
+ * Create + edit dialog for categories. Create exposes every column the API
+ * accepts (slug is optional and auto-generated when blank); edit shows the
+ * slug read-only because slugs are immutable after creation.
+ */
+function CategoryFormDialog({
+  mode,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  mode: CategoryFormMode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: (saved: { kind: "create"; slug: string } | { kind: "edit"; id: string; patch: CategoryPatch }) => void;
+}) {
+  const { toast } = useToast();
+  const isEdit = mode.kind === "edit";
+
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [description, setDescription] = useState("");
+  const [longDescription, setLongDescription] = useState("");
+  const [accent, setAccent] = useState<CatalogCategory["accent"]>("violet");
+  const [featured, setFeatured] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Hydrate the fields from the target row whenever the dialog opens.
+  useEffect(() => {
+    if (!open) return;
+    const category = mode.kind === "edit" ? mode.category : null;
+    setName(category?.name ?? "");
+    setSlug(category?.slug ?? "");
+    setDescription(category?.description ?? "");
+    setLongDescription(category?.longDescription ?? "");
+    setAccent(category?.accent ?? "violet");
+    setFeatured(Boolean(category?.featured));
+  }, [open, mode]);
+
+  const submit = async () => {
+    if (saving || name.trim() === "") return;
+    setSaving(true);
+    try {
+      if (mode.kind === "create") {
+        const created = await adminService.createCategory({
+          name: name.trim(),
+          ...(slug.trim() ? { slug: slug.trim() } : {}),
+          ...(description.trim() ? { description: description.trim() } : {}),
+          ...(longDescription.trim() ? { longDescription: longDescription.trim() } : {}),
+          accent,
+          featured,
+        });
+        toast({ title: "Category created", description: `${name.trim()} is live at /collections/${created.slug}.` });
+        onOpenChange(false);
+        onSaved({ kind: "create", slug: created.slug });
+      } else {
+        const category = mode.category;
+        const patch: CategoryPatch = {};
+        if (name.trim() !== category.name) patch.name = name.trim();
+        if (description.trim() !== category.description) patch.description = description.trim();
+        const nextLong = longDescription.trim();
+        if (nextLong !== (category.longDescription ?? "")) patch.longDescription = nextLong === "" ? null : nextLong;
+        if (accent !== category.accent) patch.accent = accent;
+        if (featured !== Boolean(category.featured)) patch.featured = featured;
+
+        if (Object.keys(patch).length > 0) {
+          await adminService.updateCategory(category.id, patch);
+        }
+        toast({ title: "Category updated", description: `${name.trim()} was saved to the taxonomy.` });
+        onOpenChange(false);
+        onSaved({ kind: "edit", id: category.id, patch });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: isEdit ? "Could not update the category" : "Could not create the category",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="font-display">{isEdit ? `Edit ${mode.category.name}` : "Add category"}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? "Edits save to the category record immediately — collection pages reflect them right away."
+              : "Creates a real category with a unique slug. Leave the slug blank to auto-generate it from the name."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+          className="grid gap-4 sm:grid-cols-2"
+        >
+          <FormField label="Name" htmlFor="category-form-name" required className="sm:col-span-2">
+            <TextInput id="category-form-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. Heat-Not-Burn Sticks" autoComplete="off" />
+          </FormField>
+
+          {isEdit ? (
+            <FormField label="Slug" htmlFor="category-form-slug" hint="Slugs are permanent — collection links across the storefront point at them." className="sm:col-span-2">
+              <TextInput id="category-form-slug" value={slug} readOnly disabled className="font-mono" />
+            </FormField>
+          ) : (
+            <FormField label="Slug (optional)" htmlFor="category-form-slug" hint="Lowercase letters, numbers and dashes. Left blank, it is generated from the name." className="sm:col-span-2">
+              <TextInput id="category-form-slug" value={slug} onChange={(e) => setSlug(e.target.value)} maxLength={80} placeholder="e.g. heat-not-burn" className="font-mono" autoComplete="off" />
+            </FormField>
+          )}
+
+          <FormField label="Description" htmlFor="category-form-description" hint="Shown on the collection tile and cards." className="sm:col-span-2">
+            <TextArea id="category-form-description" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={300} placeholder="A short summary of what belongs in this collection…" />
+          </FormField>
+
+          <FormField label="Long description" htmlFor="category-form-long-description" hint="Intro paragraph on the collection landing page. Clear it to remove." className="sm:col-span-2">
+            <TextArea id="category-form-long-description" rows={4} value={longDescription} onChange={(e) => setLongDescription(e.target.value)} maxLength={2000} placeholder="Optional — a fuller introduction for the /collections page…" />
+          </FormField>
+
+          <FormField label="Accent" htmlFor="category-form-accent" hint="Color used for dots, chips and highlights.">
+            <Select id="category-form-accent" value={accent} onChange={(e) => setAccent(e.target.value as CatalogCategory["accent"])}>
+              {ACCENT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+
+          <div className="flex items-end pb-1">
+            <div className="flex w-full items-start justify-between gap-4 rounded-xl border border-line bg-foreground/[0.02] px-4 py-3">
+              <div>
+                <p className="text-[0.86rem] font-medium text-foreground">Featured category</p>
+                <p className="mt-0.5 text-[0.76rem] leading-relaxed text-muted-foreground">Shown on the homepage collection tiles.</p>
+              </div>
+              <Switch checked={featured} onCheckedChange={setFeatured} aria-label="Featured category" />
+            </div>
+          </div>
+
+          <DialogFooter className="sm:col-span-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving || name.trim() === ""}>
+              <Plus className="size-4" aria-hidden="true" />
+              {saving ? "Saving…" : isEdit ? "Save changes" : "Create category"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -58,10 +233,8 @@ export function CategoriesView() {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const [newName, setNewName] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newAccent, setNewAccent] = useState<CatalogCategory["accent"]>("violet");
-  const [creating, setCreating] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<CategoryFormMode>({ kind: "create" });
   const [deleteTarget, setDeleteTarget] = useState<CatalogCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
@@ -93,16 +266,35 @@ export function CategoriesView() {
     setReloadKey((k) => k + 1);
   };
 
-  const patchRow = (id: string, p: Partial<CatalogCategory>) =>
-    setCategories((prev) => (prev ? prev.map((c) => (c.id === id ? { ...c, ...p } : c)) : prev));
+  const openCreate = () => {
+    setFormMode({ kind: "create" });
+    setFormOpen(true);
+  };
+
+  const openEdit = (row: CatalogCategory) => {
+    setFormMode({ kind: "edit", category: row });
+    setFormOpen(true);
+  };
+
+  const onFormSaved = (saved: { kind: "create"; slug: string } | { kind: "edit"; id: string; patch: CategoryPatch }) => {
+    if (saved.kind === "create") {
+      setReloadKey((k) => k + 1);
+    } else {
+      // The API uses null to clear longDescription; the client row type models
+      // "cleared" as undefined, so normalise before merging.
+      const { longDescription, ...rest } = saved.patch;
+      const rowPatch: Partial<CatalogCategory> = longDescription === undefined ? rest : { ...rest, longDescription: longDescription ?? undefined };
+      setCategories((prev) => (prev ? prev.map((c) => (c.id === saved.id ? { ...c, ...rowPatch } : c)) : prev));
+    }
+  };
 
   /** Optimistic toggle — reverts and toasts when the API rejects it. */
   const onToggleFeatured = async (row: CatalogCategory, next: boolean) => {
-    patchRow(row.id, { featured: next });
+    setCategories((prev) => (prev ? prev.map((c) => (c.id === row.id ? { ...c, featured: next } : c)) : prev));
     try {
       await adminService.updateCategory(row.id, { featured: next });
     } catch (error) {
-      patchRow(row.id, { featured: row.featured });
+      setCategories((prev) => (prev ? prev.map((c) => (c.id === row.id ? { ...c, featured: row.featured } : c)) : prev));
       toast({
         variant: "destructive",
         title: "Could not update the category",
@@ -112,43 +304,16 @@ export function CategoriesView() {
   };
 
   const onChangeAccent = async (row: CatalogCategory, accent: CatalogCategory["accent"]) => {
-    const previous = row.accent;
-    patchRow(row.id, { accent });
+    setCategories((prev) => (prev ? prev.map((c) => (c.id === row.id ? { ...c, accent } : c)) : prev));
     try {
       await adminService.updateCategory(row.id, { accent });
     } catch (error) {
-      patchRow(row.id, { accent: previous });
+      setCategories((prev) => (prev ? prev.map((c) => (c.id === row.id ? { ...c, accent: row.accent } : c)) : prev));
       toast({
         variant: "destructive",
         title: "Could not update the category",
         description: error instanceof Error ? error.message : "Please try again.",
       });
-    }
-  };
-
-  const addCategory = async () => {
-    const name = newName.trim();
-    if (!name || creating) return;
-    setCreating(true);
-    try {
-      const created = await adminService.createCategory({
-        name,
-        ...(newDescription.trim() ? { description: newDescription.trim() } : {}),
-        accent: newAccent,
-      });
-      toast({ title: "Category created", description: `${name} is live at /collections/${created.slug}.` });
-      setNewName("");
-      setNewDescription("");
-      setNewAccent("violet");
-      setReloadKey((k) => k + 1);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Could not create the category",
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -179,6 +344,17 @@ export function CategoriesView() {
       className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
     >
       <Trash2 className="size-4" aria-hidden="true" />
+    </button>
+  );
+
+  const editButton = (row: CatalogCategory) => (
+    <button
+      type="button"
+      onClick={() => openEdit(row)}
+      aria-label={`Edit ${row.name}`}
+      className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+    >
+      <Pencil className="size-4" aria-hidden="true" />
     </button>
   );
 
@@ -244,20 +420,30 @@ export function CategoriesView() {
     {
       key: "actions",
       header: "",
-      className: "w-16 text-right",
-      cell: (row) => <span className="inline-flex items-center justify-end">{deleteButton(row)}</span>,
+      className: "w-24 text-right",
+      cell: (row) => (
+        <span className="inline-flex items-center justify-end gap-1">
+          {editButton(row)}
+          {deleteButton(row)}
+        </span>
+      ),
     },
   ];
 
-  const hasNew = Boolean(newName.trim());
-
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <header>
-        <h1 className="font-display text-h2 font-bold tracking-tight text-foreground">Categories</h1>
-        <p className="mt-1.5 max-w-2xl text-[0.92rem] text-muted-foreground">
-          Category taxonomy — names, slugs, product counts, featured flags and accent colors. Changes save immediately.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-h2 font-bold tracking-tight text-foreground">Categories</h1>
+          <p className="mt-1.5 max-w-2xl text-[0.92rem] text-muted-foreground">
+            Category taxonomy — names, slugs, product counts, featured flags and accent colors. Featured and accent
+            save instantly; full details live in the edit dialog.
+          </p>
+        </div>
+        <Button onClick={openCreate}>
+          <Plus className="size-4" aria-hidden="true" />
+          Add category
+        </Button>
       </header>
 
       {error ? (
@@ -265,7 +451,13 @@ export function CategoriesView() {
       ) : loading && !categories ? (
         <TableSkeleton />
       ) : categories && categories.length === 0 ? (
-        <EmptyState icon={Tags} title="No categories" body="No categories in the catalog yet — add one below." />
+        <EmptyState
+          icon={Tags}
+          title="No categories"
+          body="No categories in the catalog yet — add the first one to organise products into collections."
+          actionLabel="Add category"
+          onAction={openCreate}
+        />
       ) : categories ? (
         <DataTable
           columns={columns}
@@ -283,18 +475,7 @@ export function CategoriesView() {
                 <span className="text-[0.8rem] text-muted-foreground">{row.itemCount} products</span>
                 <span className="inline-flex items-center gap-2">
                   <Switch checked={Boolean(row.featured)} onCheckedChange={(v) => void onToggleFeatured(row, v)} aria-label={`Feature ${row.name}`} />
-                  <Select
-                    aria-label={`Accent for ${row.name}`}
-                    value={row.accent}
-                    onChange={(e) => void onChangeAccent(row, e.target.value as CatalogCategory["accent"])}
-                    className="h-9 w-28 text-[0.8rem]"
-                  >
-                    {ACCENT_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </Select>
+                  {editButton(row)}
                   {deleteButton(row)}
                 </span>
               </div>
@@ -304,37 +485,7 @@ export function CategoriesView() {
         />
       ) : null}
 
-      <FormSection title="Add category" description="Creates a real category with an auto-generated, unique slug.">
-        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10.5rem_auto]">
-          <FormField label="Name" htmlFor="new-cat-name" required>
-            <TextInput id="new-cat-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Batteries" maxLength={80} className="h-10" />
-          </FormField>
-          <FormField label="Description" htmlFor="new-cat-description">
-            <TextInput id="new-cat-description" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Shown on the collection tile" maxLength={300} className="h-10" />
-          </FormField>
-          <FormField label="Accent" htmlFor="new-cat-accent">
-            <Select id="new-cat-accent" value={newAccent} onChange={(e) => setNewAccent(e.target.value as CatalogCategory["accent"])} className="h-10">
-              {ACCENT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <button
-            type="button"
-            onClick={() => void addCategory()}
-            disabled={!hasNew || creating}
-            className={cn(
-              "inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-medium transition-all disabled:opacity-50",
-              hasNew ? "bg-primary text-primary-foreground hover:brightness-110" : "border border-line text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            {creating ? "Adding…" : "Add category"}
-          </button>
-        </div>
-      </FormSection>
+      <CategoryFormDialog open={formOpen} mode={formMode} onOpenChange={setFormOpen} onSaved={onFormSaved} />
 
       <AlertDialog
         open={deleteTarget !== null}

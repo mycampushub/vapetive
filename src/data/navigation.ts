@@ -19,7 +19,7 @@ const n = (
 
 export const NAVIGATION_ITEMS: NavigationItem[] = [
   // Header (desktop)
-  n("hdr-discover", "Discover", "/discover", 1, "header", { description: "Browse all vapes" }),
+  n("hdr-discover", "Discover", "/discover", 1, "header", { description: "Browse all heat-not-burn sticks" }),
   n("hdr-categories", "Collections", "/collections", 2, "header", { description: "Shop the collections" }),
   n("hdr-brand", "Brands", "/brand", 3, "header", { description: "Every brand we stock" }),
   n("hdr-help", "Help", "/help", 4, "header", { description: "Support and FAQs" }),

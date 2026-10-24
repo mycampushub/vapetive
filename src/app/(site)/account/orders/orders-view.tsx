@@ -85,7 +85,7 @@ function HistoryOrderRow({ order }: { order: OrderSummary }) {
     <li>
       <Link
         href={`/account/orders/${order.reference}`}
-        className="group flex items-center justify-between gap-4 rounded-2xl border border-line bg-elevated/50 p-4 transition-colors hover:border-violet-glow/40 hover:bg-white/[0.03] sm:p-5"
+        className="group flex items-center justify-between gap-4 rounded-2xl border border-line bg-elevated/50 p-4 transition-colors hover:border-violet-glow/40 hover:bg-foreground/[0.03] sm:p-5"
         aria-label={`View order ${order.reference}`}
       >
         <div className="min-w-0">

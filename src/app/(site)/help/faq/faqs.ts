@@ -3,7 +3,7 @@
  * Rendered by /help/faq with search + category filtering.
  */
 
-export const FAQ_CATEGORIES = ["Devices", "Liquids", "Safety", "Orders", "Account", "Privacy"] as const;
+export const FAQ_CATEGORIES = ["Devices", "Sticks", "Safety", "Orders", "Account", "Privacy"] as const;
 
 export type FaqCategory = (typeof FAQ_CATEGORIES)[number];
 
@@ -19,30 +19,30 @@ export const FAQS: FaqEntry[] = [
   {
     id: "brands-stocked",
     category: "Devices",
-    question: "Which vape brands does VAPETIVE stock?",
+    question: "Which brands does VAPETIVE stock?",
     answer:
-      "The most requested brands in the UAE: Al Fakher Vape, Elf Bar, Lost Mary, Geek Bar, Vozol Vape, Tugboat Vape, HQD Vape, Fummo Vape, Yuoto Vape, VGOD Stig, Maskking Vape and Silvaper Vape. The range covers disposable vapes, pod systems, bottled e-liquids, advanced kits and genuine coils — every listing shows its puff count, e-liquid capacity and nicotine strength, and is authenticity-checked before it goes on the wall.",
+      "The catalog currently stocks one focused line: IQOS ILUMA heat-not-burn tobacco sticks. The range spans the multi-origin duty-free line (Amber, Silver, Yellow, the Wave and Pearl editions), the Indonesia line (Sienna, Bronze, the Dimension Series and more) and the Japan line (Black Menthol, the Regular family and more). Every listing shows its flavour profile, sticks per pack and origin line, and is authenticity-checked before it goes on the wall.",
   },
   {
     id: "device-setup",
     category: "Devices",
-    question: "How do I set up a new device for the first time?",
+    question: "Do the sticks need a special device?",
     answer:
-      "Sealed disposables like the Elf Bar BC5000 are draw-activated — unbox and inhale. For pod systems and refillable kits, charge the battery fully over USB-C, seat the pod or coil, and wait five minutes after filling so the mesh coil saturates before the first draw. Button models power on and off with five quick presses. Full steps for your model are on its product page under Specifications.",
+      "Yes — these tobacco sticks are prepared exclusively for the IQOS ILUMA system and are not compatible with older IQOS models. The device itself is not sold here; you need a charged ILUMA holder. Insert the stick until it stops, start the heating cycle as usual and draw gently. Full usage steps are in the manual that came with your device.",
   },
   {
     id: "devices-rechargeable",
     category: "Devices",
-    question: "Are the devices rechargeable?",
+    question: "Do the sticks contain a battery?",
     answer:
-      "Most larger disposables and every pod system we list are USB-C rechargeable — the Battery line in each product's Specifications tells you the capacity and charge type. Compact sealed sticks such as the VGOD Stig Original are built to outlast their e-liquid and are then disposed of at a battery collection point.",
+      "No. Every stick is just prepared tobacco — all heating and electronics live in the IQOS ILUMA holder, which charges over USB-C. The holder's battery details are in its own manual; each stick is used once and then disposed of responsibly.",
   },
   {
     id: "coils-pods",
     category: "Devices",
-    question: "Which coils and pods fit my device?",
+    question: "Are the sticks compatible with every IQOS device?",
     answer:
-      "Pods and coils are brand- and model-specific, so always match the platform: ELFA Pro pods for the Elf Bar ELFA Pro, Q2 heads for the Geek Bar Wenax, 4-in-1 pods for the Lost Mary kit. Each listing in our Coils & Accessories collection states the platform it fits; if in doubt, WhatsApp us the model printed on your device and we will point you to the right pack.",
+      "No — they are made for the IQOS ILUMA family only and will not work correctly with older-blade IQOS models. Check the Compatibility line on each product page, and if in doubt WhatsApp us the model printed on your holder before ordering.",
   },
   {
     id: "travel-device",
@@ -58,27 +58,27 @@ export const FAQS: FaqEntry[] = [
     answer:
       "We source through vetted official distribution channels, and every brand we stock ships with its own security feature — a scratch panel or QR code on the packaging. Our Dubai team checks stock against those marks before listing it. If you want to double-check a product you bought from us, WhatsApp us the code on the panel and we will verify it against our records.",
   },
-  /* ------------------------------ Liquids ------------------------------ */
+  /* ------------------------------- Sticks ------------------------------- */
   {
     id: "store-liquids",
-    category: "Liquids",
-    question: "How should I store e-liquids?",
+    category: "Sticks",
+    question: "How should I store the tobacco sticks?",
     answer:
-      "Upright, tightly closed, out of direct sunlight and below 25 °C — and always out of reach of children and pets. Stored this way, bottled e-liquids are best enjoyed within twelve months of the date printed on the bottle.",
+      "Keep the pack sealed, upright, out of direct sunlight and below 25 °C — and always out of reach of children and pets. Stored this way, sticks are best enjoyed before the date printed on the pack.",
   },
   {
     id: "nicotine-strengths",
-    category: "Liquids",
-    question: "What nicotine strengths are available?",
+    category: "Sticks",
+    question: "Do the sticks contain nicotine?",
     answer:
-      "UAE rules cap e-liquids at 20 mg/ml. Disposables and pre-filled pods on VAPETIVE come filled with 20 mg/ml nicotine salt, bottled salts such as Al Fakher Salt 30 ml and Silvaper Salt 30 ml are offered at 10 and 20 mg/ml, and freebase lines like VGOD Cubano 60 ml run 0–6 mg/ml for refillable kits. Strengths are printed on every label and listed on each product page.",
+      "Yes — these are real tobacco products and they contain nicotine, which is addictive. Heat-not-burn delivers nicotine differently from cigarettes or e-liquids: the tobacco is heated, never burned. Nicotine information is printed on every pack and each product page carries the flavour profile and product details.",
   },
   {
     id: "salt-vs-freebase",
-    category: "Liquids",
-    question: "What is the difference between salt nicotine and freebase?",
+    category: "Sticks",
+    question: "How is heat-not-burn different from vaping?",
     answer:
-      "Nicotine salt is smoother at higher strengths and pairs with low-power pod systems for a tight mouth-to-lung draw — that is what ships in most disposables and pre-filled pods, usually as a 50/50 VG/PG blend. Freebase nicotine has a sharper throat hit and is used at lower strengths in bigger, cloudier vapor; VGOD Cubano 60 ml at 70/30 is the classic example. The Nicotine strength line in each listing tells you which is which.",
+      "Vaping aerosolises a liquid; heat-not-burn heats a real tobacco stick just enough to release a tobacco-flavoured aerosol — no burning, no ash and no lighter. That is why the sticks only work in a compatible induction device such as the IQOS ILUMA. The product pages describe each flavour profile so you can pick the tobacco, menthol or capsule edition that suits you.",
   },
   /* ------------------------------- Safety ------------------------------ */
   {
@@ -91,16 +91,16 @@ export const FAQS: FaqEntry[] = [
   {
     id: "liquid-skin-contact",
     category: "Safety",
-    question: "What should I do if liquid touches my skin?",
+    question: "What safety rules apply to the sticks?",
     answer:
-      "Rinse the area with cool running water for several minutes and wash with soap. If liquid reaches your eyes, rinse continuously for fifteen minutes and seek medical advice. Keep the bottle for reference and report the incident to the support desk.",
+      "The sticks are for adult nicotine users only — keep them sealed and away from children and pets, and never eat or swallow one; seek medical advice immediately if that happens. Do not use a damaged or damp stick, and let a used stick cool before disposing of it in general waste.",
   },
   {
     id: "dispose-device",
     category: "Safety",
-    question: "How do I dispose of a used device or battery?",
+    question: "How do I dispose of used sticks and the holder?",
     answer:
-      "Never in household waste. Take depleted devices and cells to a battery collection point — most supermarkets and electronics retailers in the UAE provide them — and place empty liquid bottles in general recycling where local rules allow.",
+      "Let used sticks cool completely, then place them in general waste where local rules allow. The ILUMA holder itself contains a rechargeable cell — never bin it; take it to a battery collection point, which most supermarkets and electronics retailers in the UAE provide.",
   },
   /* ------------------------------- Orders ------------------------------ */
   {
@@ -141,9 +141,9 @@ export const FAQS: FaqEntry[] = [
   {
     id: "returns-faulty",
     category: "Orders",
-    question: "What if a device arrives faulty?",
+    question: "What if a pack arrives faulty?",
     answer:
-      "Contact support within seven days with your order reference and a photo or short video of the fault. We replace verified faulty devices or refund the order — the details are set out in our Terms of Sale. For hygiene reasons, opened e-liquids and pods can only be returned when the fault is confirmed.",
+      "Contact support within seven days with your order reference and a photo or short video of the fault. We replace verified faulty packs or refund the order — the details are set out in our Terms of Sale. For hygiene reasons, opened packs can only be returned when the fault is confirmed.",
   },
   /* ------------------------------- Account ----------------------------- */
   {

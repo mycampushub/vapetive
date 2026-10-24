@@ -180,7 +180,7 @@ export default async function CompliancePage() {
             <RevealSection as="li" key={item.title} delay={i * 0.05}>
               <div className="flex items-start gap-4 rounded-2xl border border-line bg-elevated/50 p-5">
                 <span
-                  className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-white/[0.04] text-violet-soft"
+                  className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-foreground/[0.04] text-violet-soft"
                   aria-hidden="true"
                 >
                   <FileBadge2 className="size-[1.1rem]" />

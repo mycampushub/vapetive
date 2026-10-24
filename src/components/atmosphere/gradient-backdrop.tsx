@@ -15,14 +15,16 @@ export function GradientBackdrop({ variant = "page" }: { variant?: "page" | "acc
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 -z-20"
       style={{
-        background: `linear-gradient(180deg, #060409 0%, #0a0712 42%, #060409 100%)`,
+        // Token-driven so the light theme re-inks the page field; the mid
+        // stop mixes to the old #0a0712 under the dark palette.
+        background: `linear-gradient(180deg, var(--bg-0) 0%, color-mix(in oklab, var(--bg-0) 70%, var(--bg-2)) 42%, var(--bg-0) 100%)`,
       }}
     >
       <div className="absolute inset-0" style={{ background: bg }} />
       {/* Vignette */}
       <div
         className="absolute inset-0"
-        style={{ background: "radial-gradient(140% 110% at 50% 45%, transparent 55%, rgba(0,0,0,0.42) 100%)" }}
+        style={{ background: "radial-gradient(140% 110% at 50% 45%, transparent 55%, var(--edge-vignette) 100%)" }}
       />
     </div>
   );

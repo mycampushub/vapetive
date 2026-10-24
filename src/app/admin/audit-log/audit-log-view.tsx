@@ -36,9 +36,9 @@ function SeverityBadge({ severity }: { severity: AuditSeverity }) {
 function TableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
     <div className="space-y-2.5" aria-hidden="true">
-      <div className="skeleton-sheen h-11 rounded-xl border border-line bg-white/[0.02]" />
+      <div className="skeleton-sheen h-11 rounded-xl border border-line bg-foreground/[0.02]" />
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="skeleton-sheen h-14 rounded-xl border border-line bg-white/[0.02]" />
+        <div key={i} className="skeleton-sheen h-14 rounded-xl border border-line bg-foreground/[0.02]" />
       ))}
     </div>
   );
@@ -168,7 +168,7 @@ export function AuditLogView() {
         header: "Action",
         sortable: true,
         sortValue: (e) => e.action,
-        cell: (e) => <code className="rounded bg-white/[0.05] px-1.5 py-0.5 font-mono text-[0.76rem] text-foreground">{e.action}</code>,
+        cell: (e) => <code className="rounded bg-foreground/[0.05] px-1.5 py-0.5 font-mono text-[0.76rem] text-foreground">{e.action}</code>,
       },
       { key: "target", header: "Target", cell: (e) => <span className="text-muted-foreground">{e.target}</span> },
       { key: "severity", header: "Severity", sortable: true, sortValue: (e) => e.severity, cell: (e) => <SeverityBadge severity={e.severity} /> },
@@ -203,7 +203,7 @@ export function AuditLogView() {
         className="w-full rounded-2xl border border-line bg-elevated/40 p-4 text-left transition-colors hover:border-line-strong"
       >
         <div className="flex items-start justify-between gap-3">
-          <code className="rounded bg-white/[0.05] px-1.5 py-0.5 font-mono text-[0.76rem] text-foreground">{e.action}</code>
+          <code className="rounded bg-foreground/[0.05] px-1.5 py-0.5 font-mono text-[0.76rem] text-foreground">{e.action}</code>
           <SeverityBadge severity={e.severity} />
         </div>
         <p className="mt-2 text-[0.82rem] text-foreground">{e.target}</p>
@@ -323,7 +323,7 @@ export function AuditLogView() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex flex-wrap items-center gap-3 pr-8">
-                  <code className="rounded bg-white/[0.06] px-2 py-1 font-mono text-[0.82rem] text-foreground">
+                  <code className="rounded bg-foreground/[0.06] px-2 py-1 font-mono text-[0.82rem] text-foreground">
                     {selected.action}
                   </code>
                   <SeverityBadge severity={selected.severity} />
@@ -332,7 +332,7 @@ export function AuditLogView() {
                   Full record for audit event {selected.id}.
                 </DialogDescription>
               </DialogHeader>
-              <dl className="space-y-3 rounded-2xl border border-line bg-white/[0.02] p-4 text-sm">
+              <dl className="space-y-3 rounded-2xl border border-line bg-foreground/[0.02] p-4 text-sm">
                 <div>
                   <dt className="text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground">When</dt>
                   <dd className="mt-0.5 text-foreground">{formatDateTime(selected.at)}</dd>

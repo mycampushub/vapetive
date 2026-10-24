@@ -13,7 +13,7 @@ import { getBrands, getCategories, getProducts, getSettings } from "@/server/dat
 export const metadata: Metadata = {
   title: "#1 Vape Shop in UAE for Instant Online Delivery",
   description:
-    "Order vapes online in the UAE from Vapetive — the #1 vape shop for instant delivery. Authentic disposable vapes, pod kits, nicotine salts and e-liquids, priced in AED and delivered UAE-wide from Dubai.",
+    "Order heat-not-burn tobacco sticks online in the UAE from Vapetive — the #1 shop for instant delivery. Authentic IQOS ILUMA sticks across multi-origin, Indonesia and Japan lines, priced in AED and delivered UAE-wide from Dubai.",
 };
 
 /**

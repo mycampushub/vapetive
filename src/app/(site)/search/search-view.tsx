@@ -135,7 +135,7 @@ export function SearchView() {
       <PageHeading
         eyebrow="Catalog"
         title="Search"
-        lead="Find devices, e-liquids and accessories across the full VAPETIVE range. Suggestions appear as you type; results settle just after."
+        lead="Find heat-not-burn sticks and accessories across the full VAPETIVE range. Suggestions appear as you type; results settle just after."
       />
 
       <div className="relative max-w-2xl">
@@ -150,14 +150,14 @@ export function SearchView() {
             placeholder="Search devices, liquids, accessories…"
             aria-label="Search the catalog"
             autoFocus
-            className="h-14 w-full rounded-full border border-line bg-white/[0.03] pl-14 pr-14 text-lg text-foreground placeholder:text-muted-foreground/60 focus:border-violet-glow/60 focus:outline-none"
+            className="h-14 w-full rounded-full border border-line bg-foreground/[0.03] pl-14 pr-14 text-lg text-foreground placeholder:text-muted-foreground/60 focus:border-violet-glow/60 focus:outline-none"
           />
           {input !== "" && (
             <button
               type="button"
               onClick={clearAll}
               aria-label="Clear search"
-              className="absolute right-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground before:absolute before:-inset-2 before:rounded-full before:content-['']"
+              className="absolute right-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground before:absolute before:-inset-2 before:rounded-full before:content-['']"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -174,7 +174,7 @@ export function SearchView() {
                 <li key={s.slug}>
                   <Link
                     href={`/products/${s.slug}`}
-                    className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-white/[0.05]"
+                    className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-foreground/[0.05]"
                   >
                     <span className="min-w-0 truncate">{s.name}</span>
                     <span className="shrink-0 text-meta uppercase tracking-[0.12em] text-muted-foreground">
@@ -189,7 +189,7 @@ export function SearchView() {
       </div>
 
       {!hasQuery ? (
-        <div className="mt-10 flex flex-col items-center gap-5 rounded-3xl border border-dashed border-line-strong bg-white/[0.02] px-6 py-14 text-center">
+        <div className="mt-10 flex flex-col items-center gap-5 rounded-3xl border border-dashed border-line-strong bg-foreground/[0.02] px-6 py-14 text-center">
           <h2 className="font-display text-lg font-semibold text-foreground">Search the VAPETIVE catalog</h2>
           <p className="max-w-md text-sm text-muted-foreground">
             Look up any device, liquid or accessory. Results update as you type, and every result links to the full

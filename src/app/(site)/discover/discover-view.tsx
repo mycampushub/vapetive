@@ -115,7 +115,7 @@ export function DiscoverView() {
       <PageHeading
         eyebrow="Vapetive"
         title="Discover the range"
-        lead="Every product we stock — sealed disposables, pod systems, e-liquids, kits and accessories. Filter by collection, sort and search the UAE's leading vape brands."
+        lead="Every product we stock — heat-not-burn tobacco sticks for IQOS ILUMA across every origin line. Filter by collection, sort and search the full range."
       />
 
       {/* Search entry — navigates to the dedicated search route */}
@@ -128,7 +128,7 @@ export function DiscoverView() {
             onChange={(e) => setSearchValue(e.target.value)}
             placeholder="Search products, flavours, collections…"
             aria-label="Search the catalog"
-            className="h-12 w-full rounded-full border border-line bg-white/[0.03] pl-11 pr-24 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-violet-glow/50 focus:outline-none"
+            className="h-12 w-full rounded-full border border-line bg-foreground/[0.03] pl-11 pr-24 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-violet-glow/50 focus:outline-none"
           />
           <button
             type="submit"

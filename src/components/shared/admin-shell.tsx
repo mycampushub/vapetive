@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { hydrateAuthFromServer, useAuth } from "@/services/account";
 import { variants } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -103,7 +104,7 @@ function NavList({ onNavigate, variant }: { onNavigate?: () => void; variant: "s
                       "relative flex min-h-10 items-center gap-3 rounded-lg px-3 text-[0.86rem] font-medium transition-colors",
                       active
                         ? "bg-violet-glow/14 text-foreground"
-                        : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                        : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground"
                     )}
                   >
                     {active && (
@@ -224,7 +225,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   <Dialog.Title className="sr-only">Admin menu</Dialog.Title>
                   <Dialog.Description className="sr-only">Admin sections navigation</Dialog.Description>
                   <NavList onNavigate={() => setMobileOpen(false)} variant="drawer" />
-                  <Dialog.Close aria-label="Close admin menu" className="absolute right-4 top-4 inline-flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-white/5 hover:text-foreground">
+                  <Dialog.Close aria-label="Close admin menu" className="absolute right-4 top-4 inline-flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/5 hover:text-foreground">
                     <X className="size-5" aria-hidden="true" />
                   </Dialog.Close>
                 </motion.div>
@@ -242,7 +243,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={() => setMobileOpen(true)}
             aria-label="Open admin menu"
-            className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground lg:hidden"
+            className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-foreground/5 hover:text-foreground lg:hidden"
           >
             <Menu className="size-5" aria-hidden="true" />
           </button>
@@ -251,7 +252,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             onClick={() => setCollapsed((c) => !c)}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-expanded={!collapsed}
-            className="hidden size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground lg:inline-flex"
+            className="hidden size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-foreground/5 hover:text-foreground lg:inline-flex"
           >
             <ChevronDown className={cn("size-5 rotate-90 transition-transform duration-300", collapsed && "-rotate-90")} aria-hidden="true" />
           </button>
@@ -274,10 +275,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               href="/admin/support"
               title="Support tickets"
               aria-label="Support tickets"
-              className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground"
+              className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
             >
               <Bell className="size-[1.1rem]" aria-hidden="true" />
             </Link>
+            <ThemeToggle className="rounded-lg" />
             <UserChip />
           </div>
         </header>

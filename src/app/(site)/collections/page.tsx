@@ -8,9 +8,9 @@ import { getCategories, getProducts } from "@/server/data";
 import { canonical } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Shop Vape Collections — Disposables, Pod Systems, E-Liquids & Kits",
+  title: "Shop Heat-Not-Burn Collections — IQOS ILUMA Tobacco Sticks",
   description:
-    "Shop VAPETIVE by collection — disposable vapes, pod systems, e-liquids, advanced vape kits, plus coils and accessories from every stocked brand. Authentic stock, AED pricing, UAE-wide delivery.",
+    "Shop VAPETIVE by collection — heat-not-burn tobacco sticks made for IQOS ILUMA across the multi-origin, Indonesia and Japan lines. Authentic stock, AED pricing, UAE-wide delivery.",
   ...canonical("/collections"),
 };
 
@@ -38,8 +38,9 @@ export default async function CollectionsPage() {
             iceAccent
           />
           <p className="max-w-2xl pt-5 text-lead text-muted-foreground">
-            Five focused collections spanning every brand we stock — from sealed disposables to advanced kits and the
-            coils that keep them running. Pick a shelf below and browse the full {catalogItems.length}-product range.
+            Focused collections spanning every brand we stock — heat-not-burn
+            tobacco sticks across the multi-origin, Indonesia and Japan lines.
+            Pick a shelf below and browse the full {catalogItems.length}-product range.
           </p>
         </div>
 

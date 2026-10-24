@@ -28,7 +28,7 @@ export function SearchField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={label}
-        className="h-10 w-full rounded-xl border border-line bg-white/[0.03] pl-9 pr-8 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-violet-glow/50 focus:outline-none"
+        className="h-10 w-full rounded-xl border border-line bg-foreground/[0.03] pl-9 pr-8 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-violet-glow/50 focus:outline-none"
       />
       {value && (
         <button
@@ -204,7 +204,7 @@ export function DataTable<T extends { id: string }>({
           <table className="w-full text-left text-sm">
             {caption && <caption className="sr-only">{caption}</caption>}
             <thead>
-              <tr className="border-b border-line bg-white/[0.02]">
+              <tr className="border-b border-line bg-foreground/[0.02]">
                 {columns.map((col) => (
                   <th key={col.key} scope="col" className={cn("px-4 py-3 font-medium text-muted-foreground", col.className)} aria-sort={sort?.key === col.key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}>
                     {col.sortable ? (
@@ -231,7 +231,7 @@ export function DataTable<T extends { id: string }>({
             </thead>
             <tbody>
               {sortedRows.map((row) => (
-                <tr key={row.id} className="border-b border-line/60 transition-colors last:border-0 hover:bg-white/[0.02]">
+                <tr key={row.id} className="border-b border-line/60 transition-colors last:border-0 hover:bg-foreground/[0.02]">
                   {columns.map((col) => (
                     <td key={col.key} className={cn("px-4 py-3.5 align-middle text-foreground", col.className)}>
                       {col.cell ? col.cell(row) : String((row as Record<string, unknown>)[col.key] ?? "")}
@@ -355,7 +355,7 @@ export function AuditLogList({ events }: { events: AuditEvent[] }) {
           />
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className={cn("text-[0.7rem] font-semibold uppercase tracking-[0.14em]", SEVERITY_TONE[event.severity])}>{event.severity}</span>
-            <code className="rounded bg-white/[0.05] px-1.5 py-0.5 font-mono text-[0.74rem] text-foreground">{event.action}</code>
+            <code className="rounded bg-foreground/[0.05] px-1.5 py-0.5 font-mono text-[0.74rem] text-foreground">{event.action}</code>
             <span className="text-sm text-muted-foreground">{event.target}</span>
           </div>
           <p className="mt-1 text-[0.82rem] leading-relaxed text-muted-foreground">{event.detail}</p>

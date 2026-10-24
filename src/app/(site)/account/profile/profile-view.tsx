@@ -217,7 +217,7 @@ export function ProfileView() {
             type="button"
             onClick={onCancel}
             disabled={saving}
-            className="inline-flex min-h-12 items-center justify-center rounded-full border border-line px-6 font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.04] disabled:opacity-50"
+            className="inline-flex min-h-12 items-center justify-center rounded-full border border-line px-6 font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.04] disabled:opacity-50"
           >
             Cancel
           </button>

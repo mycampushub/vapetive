@@ -402,7 +402,7 @@ export function SettingsView({ settings }: { settings: SiteSettings }) {
       {/* Feature flags */}
       <FormSection title="Feature flags" description="Storefront switches — saved with the next Save and enforced by the API.">
         <div className="space-y-5">
-          <div className="flex items-start justify-between gap-4 rounded-xl border border-line bg-white/[0.02] px-4 py-3.5">
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-line bg-foreground/[0.02] px-4 py-3.5">
             <div>
               <p className="text-[0.88rem] font-medium text-foreground">Maintenance mode</p>
               <p className="mt-0.5 text-[0.78rem] text-muted-foreground">
@@ -416,7 +416,7 @@ export function SettingsView({ settings }: { settings: SiteSettings }) {
               aria-label="Maintenance mode"
             />
           </div>
-          <div className="flex items-start justify-between gap-4 rounded-xl border border-line bg-white/[0.02] px-4 py-3.5">
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-line bg-foreground/[0.02] px-4 py-3.5">
             <div>
               <p className="text-[0.88rem] font-medium text-foreground">Checkout enabled</p>
               <p className="mt-0.5 text-[0.78rem] text-muted-foreground">
@@ -442,14 +442,14 @@ export function SettingsView({ settings }: { settings: SiteSettings }) {
           {INTEGRATIONS.map((integration) => {
             const tone =
               integration.status === "verified"
-                ? { border: "border-emerald-400/25", text: "text-emerald-300", dot: "bg-emerald-400" }
+                ? { border: "border-success/30", text: "text-success", dot: "bg-success" }
                 : integration.status === "pending_vendor"
                   ? { border: "border-warning/30", text: "text-warning", dot: "bg-warning" }
                   : integration.status === "out_of_scope"
                     ? { border: "border-line", text: "text-muted-foreground", dot: "bg-muted-foreground" }
                     : { border: "border-line", text: "text-muted-foreground", dot: "bg-line-strong" };
             return (
-              <li key={integration.id} className={`rounded-2xl border ${tone.border} bg-white/[0.02] p-4`}>
+              <li key={integration.id} className={`rounded-2xl border ${tone.border} bg-foreground/[0.02] p-4`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-line bg-elevated/60">

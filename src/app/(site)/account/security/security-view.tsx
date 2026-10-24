@@ -263,7 +263,7 @@ export function SecurityView() {
       </section>
 
       {/* MFA placeholder */}
-      <section className="rounded-2xl border border-dashed border-line-strong bg-white/[0.02] p-5 sm:p-6" aria-labelledby="security-mfa-heading">
+      <section className="rounded-2xl border border-dashed border-line-strong bg-foreground/[0.02] p-5 sm:p-6" aria-labelledby="security-mfa-heading">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 id="security-mfa-heading" className="font-display text-[1.02rem] font-semibold text-foreground">

@@ -199,7 +199,7 @@ function OrderDetailBody({ detail }: { detail: OrderDetail }) {
 
           <section className={cardShell} aria-labelledby="order-support-heading">
             <div className="flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-xl border border-line bg-white/[0.04] text-violet-soft">
+              <span className="flex size-10 items-center justify-center rounded-xl border border-line bg-foreground/[0.04] text-violet-soft">
                 <LifeBuoy className="size-5" aria-hidden="true" />
               </span>
               <h2 id="order-support-heading" className="font-display text-[1.02rem] font-semibold text-foreground">
@@ -208,7 +208,7 @@ function OrderDetailBody({ detail }: { detail: OrderDetail }) {
             </div>
             <Link
               href={detail.supportHref}
-              className="mt-4 inline-flex min-h-11 items-center rounded-full border border-line px-5 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.04]"
+              className="mt-4 inline-flex min-h-11 items-center rounded-full border border-line px-5 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.04]"
             >
               Contact support
             </Link>

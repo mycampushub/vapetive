@@ -10,6 +10,7 @@ import { DesktopNavigation } from "./desktop-navigation";
 import { MobileNavigation } from "./mobile-navigation";
 import { cn } from "@/lib/utils";
 import { useCart } from "@/services/cart";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { NavigationItem } from "@/types";
 
 /**
@@ -88,7 +89,7 @@ export function SiteHeader({
                 placeholder="Search vape brands and products…"
                 aria-label="Search vape brands and products"
                 className={cn(
-                  "h-10 w-44 rounded-full border border-line bg-white/[0.04] pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-all duration-300 focus:border-violet-glow/50 focus:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-glow/60 xl:w-56",
+                  "h-10 w-44 rounded-full border border-line bg-foreground/[0.04] pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-all duration-300 focus:border-violet-glow/50 focus:bg-foreground/[0.06] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-glow/60 xl:w-56",
                   searchOpen && quickSearch && "w-64 xl:w-72"
                 )}
               />
@@ -100,7 +101,7 @@ export function SiteHeader({
           <Link
             href="/cart"
             aria-label={`Cart${cartCount > 0 ? `, ${cartCount} ${cartCount === 1 ? "item" : "items"}` : ""}`}
-            className="relative hidden size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground md:inline-flex"
+            className="relative hidden size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground md:inline-flex"
           >
             <ShoppingBag className="size-[1.15rem]" aria-hidden="true" />
             {cartCount > 0 && (
@@ -116,18 +117,22 @@ export function SiteHeader({
           <Link
             href="/saved"
             aria-label="Saved items"
-            className="hidden size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground md:inline-flex"
+            className="hidden size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground md:inline-flex"
           >
             <Bookmark className="size-[1.15rem]" aria-hidden="true" />
           </Link>
 
           <Link
             href="/account"
-            className="hidden h-10 items-center gap-2 rounded-full border border-line-strong bg-white/[0.03] px-4 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/40 hover:bg-white/[0.06] md:inline-flex"
+            className="hidden h-10 items-center gap-2 rounded-full border border-line-strong bg-foreground/[0.03] px-4 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/40 hover:bg-foreground/[0.06] md:inline-flex"
           >
             <UserRound className="size-4" aria-hidden="true" />
             Account
           </Link>
+
+          {/* Light/dark switch — visible at every breakpoint (the mobile
+              sheet carries a second one); the choice persists per user. */}
+          <ThemeToggle />
 
           <button
             type="button"
@@ -135,7 +140,7 @@ export function SiteHeader({
             aria-expanded={mobileOpen}
             aria-controls="mobile-navigation"
             aria-label="Open menu"
-            className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground lg:hidden"
+            className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground lg:hidden"
           >
             <Menu className="size-5" aria-hidden="true" />
           </button>

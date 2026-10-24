@@ -189,7 +189,7 @@ export function RegisterView() {
         />
 
         {/* Optional communications — separate consents */}
-        <div className="space-y-3 rounded-2xl border border-line bg-white/[0.02] p-4">
+        <div className="space-y-3 rounded-2xl border border-line bg-foreground/[0.02] p-4">
           <p className="text-[0.82rem] font-medium text-foreground">Optional communications</p>
           <Controller
             control={form.control}

@@ -142,7 +142,7 @@ export default async function BrandPage({ params }: BrandPageProps) {
             >
               <span className="flex items-center gap-3">
                 <span
-                  className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-white/[0.04]"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-foreground/[0.04]"
                   style={{ color: accent }}
                   aria-hidden="true"
                 >
@@ -168,7 +168,7 @@ export default async function BrandPage({ params }: BrandPageProps) {
             >
               <span className="flex items-center gap-3">
                 <span
-                  className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-white/[0.04]"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-foreground/[0.04]"
                   style={{ color: accent }}
                   aria-hidden="true"
                 >

@@ -12,9 +12,9 @@ import { getBrands, getProducts } from "@/server/data";
 import { canonical } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Vape Brands UAE — Every Brand We Stock",
+  title: "IQOS ILUMA UAE — Every Brand We Stock",
   description:
-    "Every vape brand worth knowing in the UAE — Al Fakher, Elf Bar, Lost Mary, Geek Bar, Vozol, Tugboat, HQD, Fummo, Yuoto, VGOD Stig, Maskking and Silvaper — authenticity-checked stock, AED pricing and UAE-wide delivery from Dubai.",
+    "IQOS ILUMA heat-not-burn tobacco sticks in the UAE — the multi-origin duty-free line, the Indonesia line and the Japan line — authenticity-checked stock, AED pricing and UAE-wide delivery from Dubai.",
   ...canonical("/brand"),
 };
 
@@ -49,8 +49,8 @@ export default async function BrandDirectoryPage() {
             id="brands-heading"
           />
           <p className="max-w-2xl text-lead text-muted-foreground">
-            VAPETIVE is the UAE&apos;s vape shop stocking the region&apos;s leading brands — Al Fakher to
-            Silvaper — all with authenticity-checked stock and AED pricing.
+            VAPETIVE is the UAE&apos;s shop stocking heat-not-burn tobacco sticks made for
+            IQOS ILUMA — all with authenticity-checked stock and AED pricing.
           </p>
           <p className="flex items-center gap-2 text-[0.78rem] text-muted-foreground">
             <BadgeCheck className="size-4 shrink-0 text-violet-soft" aria-hidden="true" />

@@ -171,7 +171,7 @@ export function OverviewView() {
           </div>
           <Link
             href="/account/profile"
-            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.04]"
+            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.04]"
           >
             Edit profile
             <ArrowRight className="size-4" aria-hidden="true" />
@@ -202,7 +202,7 @@ export function OverviewView() {
           </dl>
           <Link
             href="/account/security"
-            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.04]"
+            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.04]"
           >
             Manage security
             <ArrowRight className="size-4" aria-hidden="true" />
@@ -212,7 +212,7 @@ export function OverviewView() {
         {/* Saved items */}
         <section className={cardShell} aria-labelledby="overview-saved-heading">
           <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-xl border border-line bg-white/[0.04] text-violet-soft">
+            <span className="flex size-10 items-center justify-center rounded-xl border border-line bg-foreground/[0.04] text-violet-soft">
               <Bookmark className="size-5" aria-hidden="true" />
             </span>
             <h3 id="overview-saved-heading" className="font-display text-[1.02rem] font-semibold text-foreground">
@@ -225,7 +225,7 @@ export function OverviewView() {
           </p>
           <Link
             href="/account/saved"
-            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.04]"
+            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.04]"
           >
             View saved items
             <ArrowRight className="size-4" aria-hidden="true" />
@@ -250,8 +250,8 @@ export function OverviewView() {
           <div className="mt-4">
             {orders.state === "loading" && (
               <div className="space-y-2" aria-hidden="true">
-                <div className="skeleton-sheen h-14 rounded-xl bg-white/[0.03]" />
-                <div className="skeleton-sheen h-14 rounded-xl bg-white/[0.03]" />
+                <div className="skeleton-sheen h-14 rounded-xl bg-foreground/[0.03]" />
+                <div className="skeleton-sheen h-14 rounded-xl bg-foreground/[0.03]" />
               </div>
             )}
 
@@ -277,7 +277,7 @@ export function OverviewView() {
                   <li key={order.reference}>
                     <Link
                       href={`/account/orders/${order.reference}`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-violet-glow/40 hover:bg-white/[0.03]"
+                      className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-violet-glow/40 hover:bg-foreground/[0.03]"
                     >
                       <div className="min-w-0">
                         <p className="truncate font-mono text-[0.82rem] text-foreground">{order.reference}</p>

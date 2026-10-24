@@ -56,7 +56,7 @@ export function LegalDocumentTemplate({ doc, otherDocs }: { doc: LegalDocument; 
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line bg-white/[0.03] px-4 text-[0.85rem] font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.06]"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line bg-foreground/[0.03] px-4 text-[0.85rem] font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.06]"
           >
             <Printer className="size-4" aria-hidden="true" />
             Print this document
@@ -170,7 +170,7 @@ export function LegalDocumentTemplate({ doc, otherDocs }: { doc: LegalDocument; 
 
 function MetaChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-line bg-white/[0.03] px-2.5 py-1 font-mono text-meta text-muted-foreground">
+    <span className="inline-flex items-center rounded-full border border-line bg-foreground/[0.03] px-2.5 py-1 font-mono text-meta text-muted-foreground">
       {children}
     </span>
   );

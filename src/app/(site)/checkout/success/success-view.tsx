@@ -134,7 +134,7 @@ function SuccessConfirmation({ reference }: { reference: string | null }) {
         <p className="max-w-md text-lead text-muted-foreground">
           Thank you — your order is in. Keep the reference handy: the courier verifies your Emirates ID at the door.
         </p>
-        <p className="rounded-full border border-line bg-white/[0.04] px-4 py-1.5 font-mono text-[0.85rem] tracking-wide text-foreground">
+        <p className="rounded-full border border-line bg-foreground/[0.04] px-4 py-1.5 font-mono text-[0.85rem] tracking-wide text-foreground">
           {summary.reference}
         </p>
       </div>
@@ -191,7 +191,7 @@ function SuccessConfirmation({ reference }: { reference: string | null }) {
           </Link>
           <Link
             href="/discover"
-            className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line px-6 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.04]"
+            className="inline-flex min-h-12 items-center gap-2 rounded-full border border-line px-6 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.04]"
           >
             <Compass className="size-4" aria-hidden="true" />
             Continue shopping

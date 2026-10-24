@@ -74,7 +74,7 @@ export function FormField({
 }
 
 const baseInput =
-  "h-11 w-full rounded-xl border border-line bg-white/[0.03] px-3.5 text-[0.9rem] text-foreground placeholder:text-muted-foreground/60 transition-colors focus:border-violet-glow/60 focus:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-glow/50 disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-error/60";
+  "h-11 w-full rounded-xl border border-line bg-foreground/[0.03] px-3.5 text-[0.9rem] text-foreground placeholder:text-muted-foreground/60 transition-colors focus:border-violet-glow/60 focus:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-glow/50 disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-error/60";
 
 /* ----------------------------- TextInput --------------------------- */
 
@@ -106,7 +106,7 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
   function Select({ className, invalid, children, ...props }, ref) {
     return (
       <div className="relative">
-        <select ref={ref} aria-invalid={invalid || undefined} className={cn(baseInput, "appearance-none pr-10 [&>option]:bg-[#130e1c] [&>option]:text-foreground", className)} {...props}>
+        <select ref={ref} aria-invalid={invalid || undefined} className={cn(baseInput, "appearance-none pr-10 [&>option]:bg-popover [&>option]:text-foreground", className)} {...props}>
           {children}
         </select>
         <svg className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -180,7 +180,7 @@ export function Checkbox({
         onClick={() => onChange(!checked)}
         className={cn(
           "relative mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border transition-all before:absolute before:-inset-2.5 before:rounded-lg before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-glow/50",
-          checked ? "border-violet-glow bg-violet-glow text-white" : "border-line-strong bg-white/[0.03] hover:border-violet-glow/50",
+          checked ? "border-violet-glow bg-violet-glow text-white" : "border-line-strong bg-foreground/[0.03] hover:border-violet-glow/50",
           disabled && "cursor-not-allowed opacity-50"
         )}
       >
@@ -238,7 +238,7 @@ export function RadioGroup({
               key={opt.value}
               className={cn(
                 "flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors",
-                selected ? "border-violet-glow/50 bg-violet-glow/[0.07]" : "border-line bg-white/[0.02] hover:border-line-strong"
+                selected ? "border-violet-glow/50 bg-violet-glow/[0.07]" : "border-line bg-foreground/[0.02] hover:border-line-strong"
               )}
             >
               <input

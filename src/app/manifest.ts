@@ -12,7 +12,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Vapetive — #1 Vape Shop in UAE for Instant Online Delivery",
     short_name: "Vapetive",
     description:
-      "Shop authentic disposable vapes, pod systems and e-liquids with transparent AED pricing and age-verified UAE-wide delivery from Dubai.",
+      "Shop authentic heat-not-burn tobacco sticks made for IQOS ILUMA with transparent AED pricing and age-verified UAE-wide delivery from Dubai.",
     id: "/",
     start_url: "/",
     display: "standalone",

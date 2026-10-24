@@ -240,21 +240,8 @@ for (const item of CATALOG_ITEMS) {
   const categoryId = categoryIdBySlug.get(item.categorySlug);
   if (!categoryId) throw new Error(`Category "${item.categorySlug}" not found for product ${item.slug}`);
 
-  // Stock policy derived from the mock availability.
-  // Demo policy: the mock catalog ships every product as in_stock; a few
-  // well-known slugs are deliberately set to low/out of stock so all
-  // availability states (low-stock badge, blocked cart lines) are exercised.
-  const LOW_STOCK_SLUGS = new Set(["elf-bar-pi9000", "fummo-king-6000"]);
-  const OUT_OF_STOCK_SLUGS = new Set(["al-fakher-crown-bar-pro-8000"]);
-  const qty = OUT_OF_STOCK_SLUGS.has(item.slug)
-    ? 0
-    : LOW_STOCK_SLUGS.has(item.slug)
-      ? 3
-      : item.availability === "in_stock"
-        ? 40
-        : item.availability === "low_stock"
-          ? 3
-          : 0;
+  // Stock policy derived from the mock availability (fils: AED × 100).
+  const qty = item.availability === "low_stock" ? 3 : item.availability === "in_stock" ? 40 : 0;
 
   upsert("products", "slug", {
     id,
@@ -372,6 +359,70 @@ for (const item of CATALOG_ITEMS) {
     ).run(productId, relatedId, position);
   });
 }
+
+/* ------------------------- catalog sync (declarative purge) ------------------------- */
+
+/**
+ * The data files above are the catalog source of truth: drop everything
+ * the seed no longer declares so re-running the seed converges the DB
+ * to the seed (old products/brands/categories/media/demo-order lines
+ * disappear instead of lingering as orphans).
+ */
+console.log("• catalog sync (purge non-seed rows)");
+
+// 1. Demo orders are rebuilt from the definitions below every run, so
+//    their line items always reference products that exist. Payments
+//    (and their refunds) RESTRICT order deletion — clear them first.
+const seededOrderFilter = `meta_json LIKE '%"seeded":true%'`;
+db.prepare(
+  `DELETE FROM refunds WHERE payment_id IN (SELECT p.id FROM payments p JOIN orders o ON o.id = p.order_id WHERE o.${seededOrderFilter})`
+).run();
+db.prepare(
+  `DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE ${seededOrderFilter})`
+).run();
+const purgedOrders = db
+  .prepare(`DELETE FROM orders WHERE ${seededOrderFilter}`)
+  .run(); // remaining children (items, events, addresses, documents) CASCADE
+
+// 2. Products that are no longer declared (children + cart/save/inventory rows CASCADE;
+//    order_items.product_id is SET NULL and keeps its snapshot columns).
+const seedSlugs = CATALOG_ITEMS.map((item) => item.slug);
+const productPlaceholders = seedSlugs.map(() => "?").join(", ");
+const purgedProducts = db
+  .prepare(
+    `DELETE FROM products WHERE slug NOT IN (${productPlaceholders})`
+  )
+  .run(...seedSlugs);
+
+// 3. FTS rows orphaned by the product purge (triggers keep the index in step).
+db.prepare(`DELETE FROM product_fts WHERE product_id NOT IN (SELECT id FROM products)`).run();
+
+// 4. Brands / categories with no remaining declaration (products are gone,
+//    so the RESTRICT foreign keys are satisfied).
+const brandSlugs = BRANDS.map((brand) => brand.slug);
+const purgedBrands = db
+  .prepare(`DELETE FROM brands WHERE slug NOT IN (${brandSlugs.map(() => "?").join(", ")})`)
+  .run(...brandSlugs);
+const categorySlugs = CATALOG_CATEGORIES.map((category) => category.slug);
+const purgedCategories = db
+  .prepare(`DELETE FROM categories WHERE slug NOT IN (${categorySlugs.map(() => "?").join(", ")})`)
+  .run(...categorySlugs);
+
+// 5. Product-folder media no longer referenced by any catalog row (keeps
+//    brand/legal library samples; files in public/ or R2 are untouched).
+const purgedMedia = db
+  .prepare(
+    `DELETE FROM media_assets
+     WHERE folder = 'products'
+       AND id NOT IN (SELECT media_asset_id FROM product_images)
+       AND id NOT IN (SELECT image_media_id FROM categories WHERE image_media_id IS NOT NULL)
+       AND id NOT IN (SELECT logo_media_id FROM brands WHERE logo_media_id IS NOT NULL)`
+  )
+  .run();
+
+console.log(
+  `  purge: ${purgedProducts.changes} products, ${purgedBrands.changes} brands, ${purgedCategories.changes} categories, ${purgedMedia.changes} media, ${purgedOrders.changes} demo orders rebuilt`
+);
 
 /* -------------------------------- navigation -------------------------------- */
 
@@ -559,8 +610,8 @@ const demoOrders = [
     status: "delivered",
     placedAt: "2025-01-12T08:24:00.000Z",
     items: [
-      { slug: "aura-700", variantLabel: null as string | null, qty: 2 },
-      { slug: "sirocco-salt-30", variantLabel: null as string | null, qty: 1 },
+      { slug: "iqos-iluma-amber", variantLabel: "Amber" as string | null, qty: 2 },
+      { slug: "iqos-iluma-black-menthol", variantLabel: "Black Menthol" as string | null, qty: 1 },
     ],
     deliveryMethod: "standard",
     paymentMethod: "cash-on-delivery",
@@ -570,7 +621,7 @@ const demoOrders = [
     customerIndex: 1,
     status: "shipped",
     placedAt: "2025-01-15T11:02:00.000Z",
-    items: [{ slug: "obsidian-80w-kit", variantLabel: null as string | null, qty: 1 }],
+    items: [{ slug: "iqos-iluma-twilight-pearl", variantLabel: "Twilight Pearl" as string | null, qty: 1 }],
     deliveryMethod: "express",
     paymentMethod: "card-on-delivery",
   },
@@ -580,8 +631,8 @@ const demoOrders = [
     status: "processing",
     placedAt: "2025-01-18T15:41:00.000Z",
     items: [
-      { slug: "halo-pod-kit", variantLabel: null as string | null, qty: 1 },
-      { slug: "dune-pro-2500", variantLabel: null as string | null, qty: 3 },
+      { slug: "iqos-iluma-purple-wave", variantLabel: "Purple Wave" as string | null, qty: 1 },
+      { slug: "iqos-iluma-golden-edition", variantLabel: "Golden Edition" as string | null, qty: 3 },
     ],
     deliveryMethod: "standard",
     paymentMethod: "cash-on-delivery",

@@ -125,7 +125,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <Link
                 href={`/brand/${brand.slug}`}
                 aria-label={`View all ${brand.name} products`}
-                className="inline-flex items-center gap-2 self-start rounded-full border border-violet-glow/40 bg-white/[0.03] px-3.5 py-1.5 text-label font-medium uppercase tracking-[0.22em] text-violet-soft transition-colors hover:border-violet-glow/70"
+                className="inline-flex items-center gap-2 self-start rounded-full border border-violet-glow/40 bg-foreground/[0.03] px-3.5 py-1.5 text-label font-medium uppercase tracking-[0.22em] text-violet-soft transition-colors hover:border-violet-glow/70"
               >
                 <span
                   aria-hidden="true"
@@ -135,7 +135,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 {item.brand}
               </Link>
             ) : (
-              <span className="inline-flex items-center gap-2 self-start rounded-full border border-line bg-white/[0.03] px-3.5 py-1.5 text-label font-medium uppercase tracking-[0.22em] text-muted-foreground">
+              <span className="inline-flex items-center gap-2 self-start rounded-full border border-line bg-foreground/[0.03] px-3.5 py-1.5 text-label font-medium uppercase tracking-[0.22em] text-muted-foreground">
                 <span
                   aria-hidden="true"
                   className="size-1.5 shrink-0 rounded-full bg-violet-soft"

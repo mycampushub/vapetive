@@ -123,7 +123,7 @@ export function CustomerDetailView({
       {/* Privacy request */}
       <FormSection title="Privacy requests" description="Data-access and deletion requests surfaced on this customer record.">
         {customer.privacyRequest ? (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-white/[0.02] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-foreground/[0.02] p-4">
             <div className="flex items-start gap-3">
               <FileClock className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden="true" />
               <div>
@@ -159,7 +159,7 @@ export function CustomerDetailView({
         {attributedOrders.length === 0 ? (
           <p className="text-sm text-muted-foreground">No orders placed by this customer yet.</p>
         ) : (
-          <ul className="divide-y divide-line rounded-2xl border border-line bg-white/[0.02]">
+          <ul className="divide-y divide-line rounded-2xl border border-line bg-foreground/[0.02]">
             {attributedOrders.map((o) => (
               <li key={o.reference} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
@@ -195,7 +195,7 @@ export function CustomerDetailView({
         {relatedTickets.length === 0 ? (
           <p className="text-sm text-muted-foreground">No tickets matched this customer yet.</p>
         ) : (
-          <ul className="divide-y divide-line rounded-2xl border border-line bg-white/[0.02]">
+          <ul className="divide-y divide-line rounded-2xl border border-line bg-foreground/[0.02]">
             {relatedTickets.map((t) => (
               <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">

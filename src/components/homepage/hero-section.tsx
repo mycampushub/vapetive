@@ -35,7 +35,7 @@ export function HeroSection() {
       {/* Legibility scrim — keeps atmosphere visible, text readable */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(180deg,rgba(6,4,9,0.55)_0%,rgba(6,4,9,0)_30%,rgba(6,4,9,0)_56%,rgba(6,4,9,0.66)_100%)]"
+        className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(180deg,var(--scrim-ink)_0%,rgba(6,4,9,0)_30%,rgba(6,4,9,0)_56%,var(--scrim-ink)_100%)]"
       />
 
       <PageContainer className="relative z-10 py-24 sm:py-28">
@@ -47,7 +47,7 @@ export function HeroSection() {
         >
           <motion.p
             variants={item}
-            className="inline-flex items-center gap-2.5 rounded-full border border-violet-glow/35 bg-black/30 px-4 py-1.5 text-meta font-medium uppercase tracking-[0.22em] text-muted-foreground shadow-[0_0_18px_rgba(139,92,246,0.25)]"
+            className="inline-flex items-center gap-2.5 rounded-full border border-violet-glow/35 bg-foreground/10 px-4 py-1.5 text-meta font-medium uppercase tracking-[0.22em] text-muted-foreground shadow-[0_0_18px_rgba(139,92,246,0.25)]"
           >
             <span
               aria-hidden="true"
@@ -72,14 +72,14 @@ export function HeroSection() {
             </span>
             {/* Keyword reinforcement for crawlers — visible heading stays pure neon. */}
             <span className="sr-only">
-              Vapetive — the UAE&apos;s #1 vape shop for instant online delivery of disposable vapes, pod systems and e-liquids.
+              Vapetive — the UAE&apos;s #1 vape shop for instant online delivery of heat-not-burn tobacco sticks made for IQOS ILUMA.
             </span>
           </motion.h1>
 
           <motion.p variants={item} className="mt-6 max-w-md text-lead text-muted-foreground">
-            Order authentic disposable vapes, pod kits and e-liquids from the
-            brands the UAE vapes most — every unit checked, priced in AED and
-            dispatched from our Dubai warehouse the moment you order.
+            Order authentic heat-not-burn tobacco sticks made for IQOS ILUMA
+            devices — every pack checked, priced in AED and dispatched from
+            our Dubai warehouse the moment you order.
           </motion.p>
 
           <motion.div variants={item} className="mt-9 flex flex-wrap items-center gap-3 sm:gap-4">
@@ -91,7 +91,7 @@ export function HeroSection() {
             </Link>
             <Link
               href="/brand"
-              className="rounded-full border border-violet-glow/45 bg-white/[0.03] px-7 py-3.5 text-sm font-medium uppercase tracking-[0.08em] text-foreground shadow-[0_0_14px_rgba(111,214,242,0.14)] transition-colors hover:border-ice/60 hover:bg-white/[0.08] hover:shadow-[0_0_22px_rgba(111,214,242,0.3)]"
+              className="rounded-full border border-violet-glow/45 bg-foreground/[0.03] px-7 py-3.5 text-sm font-medium uppercase tracking-[0.08em] text-foreground shadow-[0_0_14px_rgba(111,214,242,0.14)] transition-colors hover:border-ice/60 hover:bg-foreground/[0.08] hover:shadow-[0_0_22px_rgba(111,214,242,0.3)]"
             >
               Browse brands
             </Link>

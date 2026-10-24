@@ -137,7 +137,7 @@ export function AccountNav() {
                   "flex min-h-11 items-center gap-3 rounded-xl border px-3.5 text-sm font-medium transition-colors",
                   active
                     ? "border-violet-glow/40 bg-violet-glow/15 text-foreground"
-                    : "border-transparent text-muted-foreground hover:border-line hover:bg-white/[0.03] hover:text-foreground"
+                    : "border-transparent text-muted-foreground hover:border-line hover:bg-foreground/[0.03] hover:text-foreground"
                 )}
               >
                 <Icon className={cn("size-[1.05rem] shrink-0", active ? "text-violet-soft" : "text-muted-foreground")} aria-hidden="true" />

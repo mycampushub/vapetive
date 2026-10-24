@@ -23,7 +23,7 @@ export async function SiteFooter() {
   const columnNames = ["Explore", "Company", "Support"] as const;
 
   return (
-    <footer className="relative mt-auto border-t border-line bg-[#08050d]">
+    <footer className="relative mt-auto border-t border-line bg-abyss">
       {/* Bottom padding clears the fixed mobile bottom nav (h-14 + safe-area);
           md+ drops it once the nav is hidden. */}
       <div className="mx-auto max-w-6xl px-4 pt-12 pb-24 sm:px-6 sm:pt-16 md:pb-10 lg:px-8">
@@ -57,7 +57,7 @@ export async function SiteFooter() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`Chat with ${settings.brandName} on WhatsApp`}
-                  className="inline-flex size-10 items-center justify-center rounded-full border border-[#25d366]/35 text-muted-foreground transition-colors hover:border-[#25d366]/70 hover:text-[#4be382] hover:shadow-[0_0_16px_rgba(37,211,102,0.3)]"
+                  className="inline-flex size-10 items-center justify-center rounded-full border border-[#25d366]/35 text-muted-foreground transition-colors hover:border-[#25d366]/70 hover:text-[#15803d] hover:shadow-[0_0_16px_rgba(37,211,102,0.3)] dark:hover:text-[#4be382]"
                 >
                   <WhatsAppIcon className="size-4" />
                 </a>
@@ -69,7 +69,7 @@ export async function SiteFooter() {
                 href={buildWhatsAppLink(composeSupportMessage())}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#4be382] underline-offset-4 transition-colors hover:underline"
+                className="text-[#15803d] underline-offset-4 transition-colors hover:underline dark:text-[#4be382]"
               >
                 {settings.contact.whatsapp}
               </a>
@@ -96,7 +96,7 @@ export async function SiteFooter() {
         </div>
 
         {/* Age notice */}
-        <div className="mt-12 rounded-2xl border border-line bg-white/[0.02] p-4 sm:p-5">
+        <div className="mt-12 rounded-2xl border border-line bg-foreground/[0.02] p-4 sm:p-5">
           <p className="text-legal text-muted-foreground">
             <span className="font-semibold text-foreground">Restricted products.</span>{" "}
             {settings.ageRestrictionNotice} {settings.complianceNotice}

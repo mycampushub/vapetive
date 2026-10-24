@@ -180,7 +180,7 @@ export function CartView() {
                               type="button"
                               onClick={() => cartService.setQty(line.key, line.qty - 1)}
                               aria-label={`Decrease quantity of ${name}`}
-                              className="relative inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground before:absolute before:-inset-1 before:rounded-full before:content-['']"
+                              className="relative inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground before:absolute before:-inset-1 before:rounded-full before:content-['']"
                             >
                               <Minus className="size-4" aria-hidden="true" />
                             </button>
@@ -191,7 +191,7 @@ export function CartView() {
                               type="button"
                               onClick={() => cartService.setQty(line.key, line.qty + 1)}
                               aria-label={`Increase quantity of ${name}`}
-                              className="relative inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground before:absolute before:-inset-1 before:rounded-full before:content-['']"
+                              className="relative inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground before:absolute before:-inset-1 before:rounded-full before:content-['']"
                             >
                               <Plus className="size-4" aria-hidden="true" />
                             </button>

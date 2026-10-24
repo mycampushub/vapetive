@@ -27,10 +27,10 @@ export function CardGridSkeleton({ count = 8, className }: { count?: number; cla
     <div className={cn("grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4", className)} aria-hidden="true">
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="skeleton-sheen rounded-2xl border border-line bg-elevated/40 p-4">
-          <div className="aspect-square w-full rounded-xl bg-white/[0.04]" />
-          <div className="mt-4 h-3 w-1/3 rounded bg-white/[0.06]" />
-          <div className="mt-2.5 h-4 w-2/3 rounded bg-white/[0.08]" />
-          <div className="mt-4 h-3 w-1/2 rounded bg-white/[0.04]" />
+          <div className="aspect-square w-full rounded-xl bg-foreground/[0.04]" />
+          <div className="mt-4 h-3 w-1/3 rounded bg-foreground/[0.06]" />
+          <div className="mt-2.5 h-4 w-2/3 rounded bg-foreground/[0.08]" />
+          <div className="mt-4 h-3 w-1/2 rounded bg-foreground/[0.04]" />
         </div>
       ))}
     </div>

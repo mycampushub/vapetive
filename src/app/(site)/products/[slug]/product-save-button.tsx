@@ -26,7 +26,7 @@ export function ProductSaveButton({ itemId, name }: { itemId: string; name: stri
         "inline-flex min-h-11 items-center gap-2 rounded-full border px-5 text-sm font-medium transition-colors",
         saved
           ? "border-violet-glow/50 bg-violet-glow/15 text-violet-soft"
-          : "border-line-strong text-foreground hover:border-violet-glow/40 hover:bg-white/[0.04]"
+          : "border-line-strong text-foreground hover:border-violet-glow/40 hover:bg-foreground/[0.04]"
       )}
     >
       {saved ? <BookmarkCheck className="size-4" aria-hidden="true" /> : <Bookmark className="size-4" aria-hidden="true" />}

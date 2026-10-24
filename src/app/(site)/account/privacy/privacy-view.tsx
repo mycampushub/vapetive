@@ -136,7 +136,7 @@ export function PrivacyView() {
           type="button"
           onClick={() => setAccessOpen(true)}
           disabled={busy}
-          className="mt-4 inline-flex min-h-12 items-center justify-center rounded-full border border-line px-6 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-white/[0.04] disabled:opacity-60"
+          className="mt-4 inline-flex min-h-12 items-center justify-center rounded-full border border-line px-6 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50 hover:bg-foreground/[0.04] disabled:opacity-60"
         >
           Request data export
         </button>

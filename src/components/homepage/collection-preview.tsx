@@ -31,7 +31,7 @@ export function CollectionPreview({ CATALOG_ITEMS }: { CATALOG_ITEMS: CatalogIte
           />
           <Link
             href="/discover"
-            className="group inline-flex items-center gap-2 rounded-full border border-line-strong bg-white/[0.03] px-5 py-2.5 text-sm font-medium text-foreground shadow-[0_0_12px_rgba(139,92,246,0.12)] transition-all hover:border-violet-glow/55 hover:shadow-[0_0_20px_rgba(139,92,246,0.35)]"
+            className="group inline-flex items-center gap-2 rounded-full border border-line-strong bg-foreground/[0.03] px-5 py-2.5 text-sm font-medium text-foreground shadow-[0_0_12px_rgba(139,92,246,0.12)] transition-all hover:border-violet-glow/55 hover:shadow-[0_0_20px_rgba(139,92,246,0.35)]"
           >
             Shop all vapes
             <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
@@ -40,7 +40,7 @@ export function CollectionPreview({ CATALOG_ITEMS }: { CATALOG_ITEMS: CatalogIte
 
         <RevealSection delay={0.06}>
           <p className="mt-5 max-w-2xl text-[0.95rem] leading-relaxed text-muted-foreground">
-            The disposables, pod kits and e-liquids UAE customers are ordering
+            The heat-not-burn sticks UAE customers are ordering
             right now — every listing authenticity-checked, priced in AED and
             ready for same-day dispatch from our Dubai warehouse.
           </p>

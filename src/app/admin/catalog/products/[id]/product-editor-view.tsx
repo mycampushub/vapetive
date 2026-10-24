@@ -530,7 +530,7 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
                   <div
                     key={variant.id}
                     className={cn(
-                      "grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[3rem_minmax(0,1fr)_9rem_9rem_auto]",
+                      "grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-foreground/[0.02] p-3 sm:grid-cols-[3rem_minmax(0,1fr)_9rem_9rem_auto]",
                       !variant.available && "opacity-70"
                     )}
                   >
@@ -605,7 +605,7 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
                   </FormField>
                   <div className="space-y-2.5">
                     {group.entries.map((entry, ei) => (
-                      <div key={ei} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto]">
+                      <div key={ei} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-foreground/[0.02] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto]">
                         <FormField label="Label" htmlFor={`spec-${gi}-${ei}-label`}>
                           <TextInput
                             id={`spec-${gi}-${ei}-label`}
@@ -679,7 +679,7 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
                   </p>
                 )}
                 {state.images.map((image, i) => (
-                  <div key={`${image.mediaAssetId}-${i}`} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[4rem_minmax(0,1fr)_auto]">
+                  <div key={`${image.mediaAssetId}-${i}`} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-foreground/[0.02] p-3 sm:grid-cols-[4rem_minmax(0,1fr)_auto]">
                     <div className="relative size-16 overflow-hidden rounded-lg border border-line bg-black/30">
                       {thumbsBroken.has(image.mediaAssetId) ? (
                         <span className="flex h-full w-full items-center justify-center text-[0.6rem] text-muted-foreground">broken</span>
@@ -716,7 +716,7 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
                         onClick={() => moveImage(i, -1)}
                         disabled={i === 0}
                         aria-label={`Move image ${i + 1} up`}
-                        className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground disabled:opacity-30"
+                        className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground disabled:opacity-30"
                       >
                         <ArrowUp className="size-4" aria-hidden="true" />
                       </button>
@@ -725,7 +725,7 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
                         onClick={() => moveImage(i, 1)}
                         disabled={i === state.images.length - 1}
                         aria-label={`Move image ${i + 1} down`}
-                        className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground disabled:opacity-30"
+                        className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground disabled:opacity-30"
                       >
                         <ArrowDown className="size-4" aria-hidden="true" />
                       </button>
@@ -771,7 +771,7 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
                   </p>
                 )}
                 {state.documents.map((doc, i) => (
-                  <div key={doc.id ?? `new-${i}`} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[minmax(0,1.4fr)_7.5rem_minmax(0,1.4fr)_auto]">
+                  <div key={doc.id ?? `new-${i}`} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-foreground/[0.02] p-3 sm:grid-cols-[minmax(0,1.4fr)_7.5rem_minmax(0,1.4fr)_auto]">
                     <FormField label="Title" htmlFor={`doc-${i}-title`}>
                       <TextInput
                         id={`doc-${i}-title`}
@@ -849,7 +849,7 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
                   </p>
                 )}
                 {state.warnings.map((warning, i) => (
-                  <div key={i} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <div key={i} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-foreground/[0.02] p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <FormField label={`Warning ${i + 1}`} htmlFor={`warning-${i}`}>
                       <TextInput
                         id={`warning-${i}`}
@@ -895,7 +895,7 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
                 {state.conformity.map((row, i) => (
                   <div
                     key={`${row.label}-${i}`}
-                    className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_9.5rem_auto]"
+                    className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-foreground/[0.02] p-3 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_9.5rem_auto]"
                   >
                     <FormField label="Requirement" htmlFor={`conf-${i}-label`}>
                       <TextInput
