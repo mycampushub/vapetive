@@ -409,68 +409,6 @@ export async function removeSavedItem(userId: string, productId: string): Promis
   await (await getDb()).run(`DELETE FROM saved_items WHERE user_id = ? AND product_id = ?`, [userId, productId]);
 }
 
-/* -------------------------------- addresses ------------------------------- */
-
-export interface AddressInput {
-  label?: string;
-  fullName: string;
-  phone: string;
-  emirate: string;
-  city: string;
-  street: string;
-  building?: string;
-  apartment?: string;
-  note?: string;
-  isDefaultShipping?: boolean;
-}
-
-export async function listAddresses(userId: string) {
-  return (await getDb()).all<Record<string, unknown>>(
-    `SELECT * FROM user_addresses WHERE user_id = ? ORDER BY is_default_shipping DESC, created_at DESC`,
-    [userId]
-  );
-}
-
-export async function createAddress(userId: string, input: AddressInput): Promise<string> {
-  const db = await getDb();
-  const id = newId("adr");
-  const now = new Date().toISOString();
-  if (input.isDefaultShipping) {
-    await db.run(`UPDATE user_addresses SET is_default_shipping = 0 WHERE user_id = ?`, [userId]);
-  }
-  await db.run(
-    `INSERT INTO user_addresses
-      (id, user_id, label, full_name, phone, emirate, city, street, building, apartment, note,
-       is_default_shipping, is_default_billing, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-    [
-      id,
-      userId,
-      input.label ?? null,
-      input.fullName,
-      input.phone,
-      input.emirate,
-      input.city,
-      input.street,
-      input.building ?? null,
-      input.apartment ?? null,
-      input.note ?? null,
-      input.isDefaultShipping ? 1 : 0,
-      now,
-      now,
-    ]
-  );
-  return id;
-}
-
-export async function deleteAddress(userId: string, addressId: string): Promise<boolean> {
-  const result = await (await getDb()).run(`DELETE FROM user_addresses WHERE id = ? AND user_id = ?`, [
-    addressId,
-    userId,
-  ]);
-  return result.changes > 0;
-}
-
 /* ---------------------------- privacy requests ---------------------------- */
 
 export async function createPrivacyRequest(

@@ -1,32 +1,54 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Archive, ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  ImagePlus,
+  Plus,
+  Save,
+  Trash2,
+} from "lucide-react";
+import { adminService } from "@/services/admin";
+import { catalogService } from "@/services/catalog";
+import { brandsService } from "@/services/brands";
 import { FormSection } from "@/components/shared/admin-primitives";
 import { AvailabilityBadge, StatusBadge } from "@/components/shared/status-badge";
-import { PrototypeNotice } from "@/components/shared/prototype-notice";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { MediaPicker } from "@/components/admin/media-picker";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { FormField, Select, TextArea, TextInput } from "@/components/forms/fields";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import type { Availability, CatalogItem, ItemVariant, SpecificationGroup } from "@/types";
+import type {
+  AdminProductDetail,
+  AdminProductDocument,
+  AdminProductImage,
+  AdminProductPatch,
+  AdminProductSpecGroup,
+  Availability,
+  Brand,
+  CatalogCategory,
+  ConformityInfo,
+} from "@/types";
 
 /* ------------------------------ helpers --------------------------- */
 
-function cloneItem(item: CatalogItem): CatalogItem {
-  return {
-    ...item,
-    images: [...item.images],
-    specs: item.specs.map((g) => ({ title: g.title, entries: g.entries.map((e) => ({ ...e })) })),
-    variants: item.variants.map((v) => ({ ...v })),
-    conformity: item.conformity.map((c) => ({ ...c })),
-    warnings: [...item.warnings],
-    documents: item.documents.map((d) => ({ ...d })),
-  };
-}
+type ConformityStatus = ConformityInfo["status"];
 
 const CONFORMITY_OPTIONS: Array<{ value: ConformityStatus; label: string }> = [
   { value: "verified", label: "Verified" },
@@ -34,145 +56,352 @@ const CONFORMITY_OPTIONS: Array<{ value: ConformityStatus; label: string }> = [
   { value: "missing", label: "Missing" },
 ];
 
-type ConformityStatus = CatalogItem["conformity"][number]["status"];
+const AVAILABILITY_OPTIONS: Array<{ value: Availability; label: string }> = [
+  { value: "in_stock", label: "In stock (derived)" },
+  { value: "low_stock", label: "Low stock (derived)" },
+  { value: "out_of_stock", label: "Out of stock (derived)" },
+  { value: "unavailable", label: "Unavailable (editorial)" },
+];
+
+/** Editor working state — variants carry a raw delta input for smooth typing. */
+interface VariantRow {
+  id: string;
+  label: string;
+  type: AdminProductDetail["variants"][number]["type"];
+  swatch: string | null;
+  available: boolean;
+  deltaInput: string;
+}
+
+interface EditorState {
+  name: string;
+  model: string;
+  tagline: string;
+  description: string;
+  price: string;
+  compare: string;
+  categoryId: string;
+  brandId: string;
+  nicotineStrength: string;
+  origin: string;
+  keywords: string;
+  lowStockThreshold: string;
+  featured: boolean;
+  isNew: boolean;
+  status: "draft" | "published";
+  availability: Availability;
+  warnings: string[];
+  conformity: ConformityInfo[];
+  images: AdminProductImage[];
+  specGroups: AdminProductSpecGroup[];
+  documents: AdminProductDocument[];
+  variants: VariantRow[];
+}
+
+function toCents(input: string): number | null {
+  const trimmed = input.trim();
+  if (trimmed === "" || !Number.isFinite(Number(trimmed))) return null;
+  return Math.round(Number(trimmed) * 100);
+}
+
+function buildState(detail: AdminProductDetail): EditorState {
+  return {
+    name: detail.name,
+    model: detail.model ?? "",
+    tagline: detail.tagline,
+    description: detail.description,
+    price: String(detail.priceCents / 100),
+    compare: detail.compareAtCents === null ? "" : String(detail.compareAtCents / 100),
+    categoryId: detail.categoryId,
+    brandId: detail.brandId,
+    nicotineStrength: detail.nicotineStrength ?? "",
+    origin: detail.origin ?? "",
+    keywords: detail.keywords ?? "",
+    lowStockThreshold: String(detail.lowStockThreshold),
+    featured: detail.featured,
+    isNew: detail.isNew,
+    status: detail.published ? "published" : "draft",
+    availability: detail.availability,
+    warnings: [...detail.warnings],
+    conformity: detail.conformity.map((c) => ({ ...c })),
+    images: detail.images.map((img) => ({ ...img })),
+    specGroups: detail.specGroups.map((g) => ({ ...g, entries: g.entries.map((e) => ({ ...e })) })),
+    documents: detail.documents.map((d) => ({ ...d })),
+    variants: detail.variants.map((v) => ({
+      id: v.id,
+      label: v.label,
+      type: v.type,
+      swatch: v.swatch,
+      available: v.available,
+      deltaInput: String(v.priceDeltaCents / 100),
+    })),
+  };
+}
 
 /* ------------------------------- view ----------------------------- */
 
-export function ProductEditorView({ item }: { item: CatalogItem }) {
-  const initial = useMemo(() => cloneItem(item), [item]);
-  const [draft, setDraft] = useState<CatalogItem>(initial);
-  const [status, setStatus] = useState<"draft" | "published">("published");
-  const [availability, setAvailability] = useState<Availability>(item.availability);
-  const [warningsText, setWarningsText] = useState(item.warnings.join("\n"));
-  const [dirty, setDirty] = useState(false);
-  const idCounter = useRef(0);
+export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
+  const router = useRouter();
   const { toast } = useToast();
 
-  const nextId = (prefix: string) => `${prefix}-new-${idCounter.current++}`;
-  const touch = () => setDirty(true);
-
-  /* ------- detail fields ------- */
-  const patchDetail = (p: Partial<CatalogItem>) => {
-    setDraft((d) => ({ ...d, ...p }));
-    touch();
-  };
-
-  /* ------- variants ------- */
-  const patchVariant = (id: string, p: Partial<ItemVariant>) => {
-    setDraft((d) => ({ ...d, variants: d.variants.map((v) => (v.id === id ? { ...v, ...p } : v)) }));
-    touch();
-  };
-  const removeVariant = (id: string) => {
-    setDraft((d) => ({ ...d, variants: d.variants.filter((v) => v.id !== id) }));
-    touch();
-  };
-  const addVariant = () => {
-    const variant: ItemVariant = {
-      id: nextId("var"),
-      label: "New variant",
-      type: draft.variants[0]?.type ?? "flavor",
-      swatch: "#8b5cf6",
-      available: true,
-    };
-    setDraft((d) => ({ ...d, variants: [...d.variants, variant] }));
-    touch();
-  };
-
-  /* ------- specifications ------- */
-  const patchSpecs = (groups: SpecificationGroup[]) => {
-    setDraft((d) => ({ ...d, specs: groups }));
-    touch();
-  };
-
-  /* ------- images ------- */
-  const patchImage = (index: number, value: string) => {
-    setDraft((d) => ({ ...d, images: d.images.map((img, i) => (i === index ? value : img)) }));
-    touch();
-  };
-  const removeImage = (index: number) => {
-    setDraft((d) => ({ ...d, images: d.images.filter((_, i) => i !== index) }));
-    touch();
-  };
-  const addImage = () => {
-    setDraft((d) => ({ ...d, images: [...d.images, `/products/${d.slug}-new.jpg`] }));
-    touch();
-  };
-
-  /* ------- documents & conformity ------- */
-  const patchDoc = (id: string, p: Partial<CatalogItem["documents"][number]>) => {
-    setDraft((d) => ({ ...d, documents: d.documents.map((doc) => (doc.id === id ? { ...doc, ...p } : doc)) }));
-    touch();
-  };
-  const removeDoc = (id: string) => {
-    setDraft((d) => ({ ...d, documents: d.documents.filter((doc) => doc.id !== id) }));
-    touch();
-  };
-  const addDoc = () => {
-    setDraft((d) => ({
-      ...d,
-      documents: [...d.documents, { id: nextId("doc"), title: "New document", type: "pdf" as const }],
-    }));
-    touch();
-  };
-  const patchConformity = (index: number, p: Partial<CatalogItem["conformity"][number]>) => {
-    setDraft((d) => ({ ...d, conformity: d.conformity.map((c, i) => (i === index ? { ...c, ...p } : c)) }));
-    touch();
-  };
-  const removeConformity = (index: number) => {
-    setDraft((d) => ({ ...d, conformity: d.conformity.filter((_, i) => i !== index) }));
-    touch();
-  };
-  const addConformity = () => {
-    setDraft((d) => ({
-      ...d,
-      conformity: [...d.conformity, { label: "New requirement", detail: "", status: "pending" as ConformityStatus }],
-    }));
-    touch();
-  };
-
-  /* ------- save (persisted via catalog API) ------- */
+  const [state, setState] = useState<EditorState>(() => buildState(detail));
+  const [version, setVersion] = useState(detail.version);
+  const [stockInput, setStockInput] = useState("");
+  const [qtyOnHand, setQtyOnHand] = useState(detail.qtyOnHand);
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [conflict, setConflict] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const [categories, setCategories] = useState<CatalogCategory[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+
+  const lastSynced = useRef(detail.updatedAt);
+
+  // Hydrate when the server sends fresh data (conflict reload).
+  useEffect(() => {
+    if (detail.updatedAt === lastSynced.current) return;
+    lastSynced.current = detail.updatedAt;
+    setState(buildState(detail));
+    setVersion(detail.version);
+    setQtyOnHand(detail.qtyOnHand);
+    setStockInput("");
+    setDirty(false);
+    setConflict(false);
+  }, [detail]);
+
+  useEffect(() => {
+    let alive = true;
+    catalogService
+      .categories()
+      .then((d) => alive && setCategories(d))
+      .catch(() => undefined);
+    brandsService
+      .brands()
+      .then((d) => alive && setBrands(d))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const patch = (p: Partial<EditorState>) => {
+    setState((prev) => ({ ...prev, ...p }));
+    setDirty(true);
+  };
+
+  const setPrice = (value: string) => {
+    setState((prev) => ({ ...prev, price: value }));
+    setPriceError(null);
+    setDirty(true);
+  };
+
+  /* ----------------------------- save ----------------------------- */
+
+  const buildPatch = (): AdminProductPatch | null => {
+    if (state.name.trim() === "") {
+      toast({ variant: "destructive", title: "Name required", description: "Give the product a name before saving." });
+      return null;
+    }
+    const priceCents = toCents(state.price);
+    const compareCents = state.compare.trim() === "" ? null : toCents(state.compare);
+    if (priceCents === null || priceCents < 0) {
+      setPriceError("Enter a price of 0 or more.");
+      return null;
+    }
+    if (compareCents !== null && compareCents < priceCents) {
+      setPriceError("Compare-at price must be greater than or equal to the price.");
+      return null;
+    }
+    const parsedStock = stockInput.trim() === "" ? null : Number(stockInput.trim());
+    if (stockInput.trim() !== "" && (!Number.isFinite(parsedStock) || (parsedStock ?? 0) < 0)) {
+      toast({ variant: "destructive", title: "Invalid stock", description: "Stock on hand must be a whole number of 0 or more." });
+      return null;
+    }
+    const restockQty = parsedStock === null ? undefined : Math.max(0, Math.round(parsedStock));
+
+    // Variant price deltas: a cleared field keeps the variant's ORIGINAL delta
+    // (empty used to silently become 0); anything typed must parse.
+    for (const v of state.variants) {
+      if (v.deltaInput.trim() !== "" && toCents(v.deltaInput) === null) {
+        toast({
+          variant: "destructive",
+          title: "Invalid variant price delta",
+          description: `Variant ${v.label} needs a valid price delta or empty to keep current.`,
+        });
+        return null;
+      }
+    }
+
+    return {
+      name: state.name.trim(),
+      model: state.model.trim() || null,
+      tagline: state.tagline.trim() || state.name.trim(),
+      description: state.description.trim() || "Full description coming soon.",
+      priceCents,
+      compareAtCents: compareCents,
+      featured: state.featured,
+      isNew: state.isNew,
+      nicotineStrength: state.nicotineStrength.trim() || null,
+      origin: state.origin.trim() || null,
+      keywords: state.keywords.trim() || null,
+      lowStockThreshold: Math.max(0, Math.round(Number(state.lowStockThreshold) || 0)),
+      warnings: state.warnings.map((w) => w.trim()).filter(Boolean),
+      conformity: state.conformity
+        .map((c) => ({ ...c, label: c.label.trim() }))
+        .filter((c) => c.label !== "")
+        .map((c) => ({
+          label: c.label,
+          ...(c.detail?.trim() ? { detail: c.detail.trim() } : {}),
+          status: c.status,
+        })),
+      images: state.images.map((img) => ({ id: img.id, mediaAssetId: img.mediaAssetId, url: img.url, alt: img.alt })),
+      specGroups: state.specGroups.map((g) => ({
+        id: g.id,
+        title: g.title.trim() || "Specifications",
+        entries: g.entries.map((e) => ({ id: e.id, label: e.label.trim() || "Specification", value: e.value.trim() })),
+      })),
+      documents: state.documents.map((d) => ({
+        id: d.id,
+        title: d.title.trim() || "Document",
+        type: d.type,
+        href: d.href?.trim() || null,
+        note: d.note?.trim() || null,
+      })),
+      variantUpdates: state.variants.map((v) => ({
+        id: v.id,
+        available: v.available,
+        priceDeltaCents:
+          v.deltaInput.trim() === ""
+            ? (detail.variants.find((dv) => dv.id === v.id)?.priceDeltaCents ?? 0)
+            : (toCents(v.deltaInput) ?? 0),
+      })),
+      categoryId: state.categoryId,
+      brandId: state.brandId,
+      publish: state.status === "published",
+      ...(state.availability === "unavailable" ? { setOutOfStock: true } : { clearOutOfStock: true }),
+      ...(restockQty !== undefined ? { restockQty } : {}),
+      expectedVersion: version,
+    };
+  };
 
   const onSave = async () => {
-    const warnings = warningsText
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    setDraft((d) => ({ ...d, warnings }));
+    if (saving) return;
+    const patchBody = buildPatch();
+    if (!patchBody) return;
     setSaving(true);
     try {
-      const response = await fetch(`/api/v1/admin/products/${encodeURIComponent(item.id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: draft.name,
-          tagline: draft.tagline,
-          description: draft.description,
-          model: draft.model ?? null,
-          price: draft.price,
-          compareAtPrice: draft.compareAtPrice ?? null,
-          featured: draft.featured ?? false,
-          isNew: draft.isNew ?? false,
-          publish: status === "published",
-          ...(availability === "unavailable" ? { setOutOfStock: true } : { clearOutOfStock: true }),
-        }),
-      });
-      const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-      if (!response.ok) throw new Error(body.error?.message ?? "Save failed");
+      const result = await adminService.updateProduct(detail.id, patchBody);
+      setVersion(result.version);
+      if (stockInput.trim() !== "") {
+        setQtyOnHand(Math.max(0, Math.round(Number(stockInput)) || 0));
+        setStockInput("");
+      }
       setDirty(false);
+      setConflict(false);
       toast({
         title: "Product saved",
-        description: `${draft.name} persisted to the catalog — search and store pages update immediately.`,
+        description: `${state.name.trim()} persisted to the catalog — storefront pages and search update immediately.`,
       });
     } catch (error) {
-      toast({
-        title: "Save failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
+      const message = error instanceof Error ? error.message : "Please try again.";
+      if (message.toLowerCase().includes("reload")) {
+        setConflict(true);
+      }
+      toast({ variant: "destructive", title: "Save failed", description: message });
     } finally {
       setSaving(false);
     }
   };
+
+  const onDelete = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await adminService.deleteProduct(detail.id);
+      toast({ title: "Product deleted", description: `${detail.name} was removed from the catalog.` });
+      router.push("/admin/catalog/products");
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+      setDeleting(false);
+    }
+  };
+
+  /* --------------------------- collections ------------------------- */
+
+  const addImages = (assets: Array<{ mediaAssetId: string; url: string; alt: string | null }>) => {
+    patch({
+      images: [
+        ...state.images,
+        ...assets.map((a) => ({ id: null as string | null, mediaAssetId: a.mediaAssetId, url: a.url, alt: a.alt })),
+      ],
+    });
+  };
+  const moveImage = (index: number, direction: -1 | 1) => {
+    const next = [...state.images];
+    const target = index + direction;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    patch({ images: next });
+  };
+
+  const addWarning = () => patch({ warnings: [...state.warnings, ""] });
+  const patchWarning = (index: number, value: string) =>
+    patch({ warnings: state.warnings.map((w, i) => (i === index ? value : w)) });
+  const removeWarning = (index: number) => patch({ warnings: state.warnings.filter((_, i) => i !== index) });
+
+  const addConformity = () =>
+    patch({ conformity: [...state.conformity, { label: "", detail: "", status: "pending" as ConformityStatus }] });
+  const patchConformity = (index: number, p: Partial<ConformityInfo>) =>
+    patch({ conformity: state.conformity.map((c, i) => (i === index ? { ...c, ...p } : c)) });
+  const removeConformity = (index: number) => patch({ conformity: state.conformity.filter((_, i) => i !== index) });
+
+  const addGroup = () =>
+    patch({ specGroups: [...state.specGroups, { id: null, title: "New group", entries: [{ id: null, label: "", value: "" }] }] });
+  const patchGroup = (gi: number, p: Partial<AdminProductSpecGroup>) =>
+    patch({ specGroups: state.specGroups.map((g, i) => (i === gi ? { ...g, ...p } : g)) });
+  const removeGroup = (gi: number) => patch({ specGroups: state.specGroups.filter((_, i) => i !== gi) });
+  const addEntry = (gi: number) =>
+    patch({
+      specGroups: state.specGroups.map((g, i) =>
+        i === gi ? { ...g, entries: [...g.entries, { id: null, label: "", value: "" }] } : g
+      ),
+    });
+  const patchEntry = (gi: number, ei: number, p: Partial<{ label: string; value: string }>) =>
+    patch({
+      specGroups: state.specGroups.map((g, i) =>
+        i === gi ? { ...g, entries: g.entries.map((e, j) => (j === ei ? { ...e, ...p } : e)) } : g
+      ),
+    });
+  const removeEntry = (gi: number, ei: number) =>
+    patch({
+      specGroups: state.specGroups.map((g, i) =>
+        i === gi ? { ...g, entries: g.entries.filter((_, j) => j !== ei) } : g
+      ),
+    });
+
+  const addDoc = () =>
+    patch({ documents: [...state.documents, { id: null, title: "", type: "pdf" as const, href: null, note: null }] });
+  const patchDoc = (index: number, p: Partial<AdminProductDocument>) =>
+    patch({ documents: state.documents.map((d, i) => (i === index ? { ...d, ...p } : d)) });
+  const removeDoc = (index: number) => patch({ documents: state.documents.filter((_, i) => i !== index) });
+
+  const patchVariant = (id: string, p: Partial<VariantRow>) =>
+    patch({ variants: state.variants.map((v) => (v.id === id ? { ...v, ...p } : v)) });
+
+  const [thumbsBroken, setThumbsBroken] = useState<Set<string>>(() => new Set());
+
+  const categoryLabel = useMemo(
+    () => categories.find((c) => c.id === state.categoryId)?.name ?? detail.categoryName,
+    [categories, state.categoryId, detail.categoryName]
+  );
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -186,10 +415,10 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
           All products
         </Link>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 className="font-display text-h2 font-bold tracking-tight text-foreground">{item.name}</h1>
-          <AvailabilityBadge availability={availability} />
-          <StatusBadge tone={status === "published" ? "success" : "neutral"}>
-            {status === "published" ? "Published" : "Draft"}
+          <h1 className="font-display text-h2 font-bold tracking-tight text-foreground">{state.name || detail.name}</h1>
+          <AvailabilityBadge availability={state.availability} />
+          <StatusBadge tone={state.status === "published" ? "success" : "neutral"}>
+            {state.status === "published" ? "Published" : "Draft"}
           </StatusBadge>
           {dirty && (
             <span className="inline-flex items-center gap-1.5" title="You have unsaved changes">
@@ -199,46 +428,87 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
           )}
         </div>
         <p className="max-w-2xl text-[0.82rem] text-muted-foreground">
-          Catalog record <code className="font-mono text-[0.76rem]">{item.id}</code> · category{" "}
-          <code className="font-mono text-[0.76rem]">{item.categorySlug}</code>
+          Catalog record <code className="font-mono text-[0.76rem]">{detail.id}</code> · SKU{" "}
+          <code className="font-mono text-[0.76rem]">{detail.sku}</code> · {categoryLabel} · v{version}
         </p>
       </header>
 
-      <PrototypeNotice>Edits save to the catalog database via PATCH — pricing, copy, flags, publish state and stock update the storefront and search index on save.</PrototypeNotice>
+      {conflict && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border border-warning/30 bg-warning/[0.07] px-4 py-3">
+          <AlertTriangle className="size-4 text-warning" aria-hidden="true" />
+          <p className="text-[0.84rem] text-warning">Someone else updated this product — reload to continue.</p>
+          <button
+            type="button"
+            onClick={() => router.refresh()}
+            className="ml-auto inline-flex min-h-9 items-center rounded-full border border-warning/50 px-4 text-[0.8rem] font-medium text-warning transition-colors hover:bg-warning/10"
+          >
+            Reload
+          </button>
+        </div>
+      )}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* Left: tabs */}
         <Tabs defaultValue="details">
           <TabsList className="h-auto min-h-9 w-full flex-wrap justify-start">
             <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="variants">Variants ({draft.variants.length})</TabsTrigger>
-            <TabsTrigger value="specs">Specifications ({draft.specs.length})</TabsTrigger>
-            <TabsTrigger value="images">Images ({draft.images.length})</TabsTrigger>
-            <TabsTrigger value="warnings">Warnings &amp; docs</TabsTrigger>
-            <TabsTrigger value="conformity">Conformity ({draft.conformity.length})</TabsTrigger>
+            <TabsTrigger value="variants">Variants ({state.variants.length})</TabsTrigger>
+            <TabsTrigger value="specs">Specifications ({state.specGroups.length})</TabsTrigger>
+            <TabsTrigger value="images">Images ({state.images.length})</TabsTrigger>
+            <TabsTrigger value="documents">Documents ({state.documents.length})</TabsTrigger>
+            <TabsTrigger value="compliance">Warnings &amp; conformity</TabsTrigger>
           </TabsList>
 
           {/* Details */}
           <TabsContent value="details" className="mt-4">
             <FormSection title="Details" description="Core identity fields shown on the public product page.">
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField label="Name" htmlFor="p-name">
-                  <TextInput id="p-name" value={draft.name} onChange={(e) => patchDetail({ name: e.target.value })} />
+                <FormField label="Name" htmlFor="p-name" required>
+                  <TextInput id="p-name" value={state.name} onChange={(e) => patch({ name: e.target.value })} maxLength={160} />
                 </FormField>
-                <FormField label="Brand" htmlFor="p-brand">
-                  <TextInput id="p-brand" value={draft.brand} onChange={(e) => patchDetail({ brand: e.target.value })} />
-                </FormField>
-                <FormField label="SKU" htmlFor="p-sku">
-                  <TextInput id="p-sku" value={draft.sku} onChange={(e) => patchDetail({ sku: e.target.value })} className="font-mono" />
+                <FormField label="SKU" htmlFor="p-sku" hint="SKU is immutable — it keys inventory and orders.">
+                  <TextInput id="p-sku" value={detail.sku} readOnly disabled className="font-mono" />
                 </FormField>
                 <FormField label="Model" htmlFor="p-model" hint="Optional chassis or model code.">
-                  <TextInput id="p-model" value={draft.model ?? ""} onChange={(e) => patchDetail({ model: e.target.value })} className="font-mono" />
+                  <TextInput id="p-model" value={state.model} onChange={(e) => patch({ model: e.target.value })} maxLength={80} className="font-mono" />
                 </FormField>
-                <FormField label="Tagline" htmlFor="p-tagline" className="sm:col-span-2">
-                  <TextInput id="p-tagline" value={draft.tagline} onChange={(e) => patchDetail({ tagline: e.target.value })} />
+                <FormField label="Slug" htmlFor="p-slug" hint="Public URL path — generated and unique.">
+                  <TextInput id="p-slug" value={detail.slug} readOnly disabled className="font-mono" />
                 </FormField>
-                <FormField label="Description" htmlFor="p-description" className="sm:col-span-2">
-                  <TextArea id="p-description" rows={5} value={draft.description} onChange={(e) => patchDetail({ description: e.target.value })} />
+                <FormField label="Category" htmlFor="p-category" required>
+                  <Select id="p-category" value={state.categoryId} onChange={(e) => patch({ categoryId: e.target.value })}>
+                    {categories.length === 0 && <option value={state.categoryId}>{detail.categoryName}</option>}
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="Brand" htmlFor="p-brand" required>
+                  <Select id="p-brand" value={state.brandId} onChange={(e) => patch({ brandId: e.target.value })}>
+                    {brands.length === 0 && <option value={state.brandId}>{detail.brandName}</option>}
+                    {brands.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="Tagline" htmlFor="p-tagline" required className="sm:col-span-2">
+                  <TextInput id="p-tagline" value={state.tagline} onChange={(e) => patch({ tagline: e.target.value })} maxLength={240} />
+                </FormField>
+                <FormField label="Description" htmlFor="p-description" required className="sm:col-span-2">
+                  <TextArea id="p-description" rows={5} value={state.description} onChange={(e) => patch({ description: e.target.value })} />
+                </FormField>
+                <FormField label="Nicotine strength" htmlFor="p-nicotine" hint="e.g. 20 mg/ml — leave blank for devices.">
+                  <TextInput id="p-nicotine" value={state.nicotineStrength} onChange={(e) => patch({ nicotineStrength: e.target.value })} maxLength={80} />
+                </FormField>
+                <FormField label="Origin" htmlFor="p-origin" hint="Country of manufacture.">
+                  <TextInput id="p-origin" value={state.origin} onChange={(e) => patch({ origin: e.target.value })} maxLength={80} />
+                </FormField>
+                <FormField label="Search keywords" htmlFor="p-keywords" hint="Comma-separated terms that feed storefront search." className="sm:col-span-2">
+                  <TextInput id="p-keywords" value={state.keywords} onChange={(e) => patch({ keywords: e.target.value })} maxLength={500} />
                 </FormField>
               </div>
             </FormSection>
@@ -247,52 +517,41 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
           {/* Variants */}
           <TabsContent value="variants" className="mt-4">
             <FormSection
-              title="Variants"
-              description="Swatch color, label and storefront availability per row — local state only."
-              actions={
-                <button
-                  type="button"
-                  onClick={addVariant}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-[0.8rem] font-medium text-muted-foreground transition-colors hover:border-violet-glow/50 hover:text-foreground"
-                >
-                  <Plus className="size-3.5" aria-hidden="true" />
-                  Add variant
-                </button>
-              }
+              title="Variants (updates only)"
+              description="Carts and orders reference variant ids, so rows cannot be added or removed here — toggle availability and adjust the price delta, then save."
             >
               <div className="space-y-2.5">
-                {draft.variants.length === 0 && (
+                {state.variants.length === 0 && (
                   <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-[0.84rem] text-muted-foreground">
-                    No variants — add one to represent flavors or finishes.
+                    This product has no variants.
                   </p>
                 )}
-                {draft.variants.map((variant) => (
+                {state.variants.map((variant) => (
                   <div
                     key={variant.id}
                     className={cn(
-                      "grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto_auto]",
+                      "grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[3rem_minmax(0,1fr)_9rem_9rem_auto]",
                       !variant.available && "opacity-70"
                     )}
                   >
-                    <FormField label="Swatch" htmlFor={`${variant.id}-swatch`}>
-                      <input
-                        id={`${variant.id}-swatch`}
-                        type="color"
-                        value={variant.swatch ?? "#8b5cf6"}
-                        onChange={(e) => patchVariant(variant.id, { swatch: e.target.value })}
-                        aria-label={`Swatch color for ${variant.label}`}
-                        className="h-10 w-full cursor-pointer rounded-lg border border-line bg-transparent p-1"
-                      />
-                    </FormField>
-                    <FormField label="Label" htmlFor={`${variant.id}-label`}>
-                      <TextInput
-                        id={`${variant.id}-label`}
-                        value={variant.label}
-                        onChange={(e) => patchVariant(variant.id, { label: e.target.value })}
-                        className="h-10"
-                      />
-                    </FormField>
-                    <div className="flex h-10 items-center gap-2">
+                    <div className="flex h-11 items-center">
+                      {variant.swatch ? (
+                        <span
+                          className="size-7 rounded-full border border-line"
+                          style={{ backgroundColor: variant.swatch }}
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <span className="inline-flex size-7 items-center justify-center rounded-full border border-line text-[0.62rem] uppercase text-muted-foreground">
+                          {variant.type.slice(0, 3)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="truncate text-[0.88rem] font-medium text-foreground">{variant.label}</p>
+                      <p className="text-[0.72rem] uppercase tracking-[0.1em] text-muted-foreground">{variant.type}</p>
+                    </div>
+                    <div className="flex h-11 items-center gap-2">
                       <Switch
                         checked={variant.available}
                         onCheckedChange={(v) => patchVariant(variant.id, { available: v })}
@@ -300,14 +559,18 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
                       />
                       <span className="text-[0.76rem] text-muted-foreground">{variant.available ? "Available" : "Hidden"}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeVariant(variant.id)}
-                      aria-label={`Remove variant ${variant.label}`}
-                      className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
-                    >
-                      <Trash2 className="size-4" aria-hidden="true" />
-                    </button>
+                    <FormField label="Price delta (AED)" htmlFor={`${variant.id}-delta`}>
+                      <TextInput
+                        id={`${variant.id}-delta`}
+                        type="number"
+                        step="0.01"
+                        value={variant.deltaInput}
+                        onChange={(e) => patchVariant(variant.id, { deltaInput: e.target.value })}
+                      />
+                    </FormField>
+                    <p className="hidden text-[0.72rem] text-muted-foreground sm:block" aria-hidden="true">
+                      id <code className="font-mono">{variant.id}</code>
+                    </p>
                   </div>
                 ))}
               </div>
@@ -316,14 +579,14 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
 
           {/* Specifications */}
           <TabsContent value="specs" className="mt-4 space-y-4">
-            {draft.specs.map((group, gi) => (
+            {state.specGroups.map((group, gi) => (
               <FormSection
                 key={gi}
                 title={`Group ${gi + 1}`}
                 actions={
                   <button
                     type="button"
-                    onClick={() => patchSpecs(draft.specs.filter((_, i) => i !== gi))}
+                    onClick={() => removeGroup(gi)}
                     aria-label={`Remove specification group ${gi + 1}`}
                     className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
                   >
@@ -336,7 +599,8 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
                     <TextInput
                       id={`spec-group-${gi}`}
                       value={group.title}
-                      onChange={(e) => patchSpecs(draft.specs.map((g, i) => (i === gi ? { ...g, title: e.target.value } : g)))}
+                      onChange={(e) => patchGroup(gi, { title: e.target.value })}
+                      maxLength={120}
                     />
                   </FormField>
                   <div className="space-y-2.5">
@@ -346,13 +610,8 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
                           <TextInput
                             id={`spec-${gi}-${ei}-label`}
                             value={entry.label}
-                            onChange={(e) =>
-                              patchSpecs(
-                                draft.specs.map((g, i) =>
-                                  i === gi ? { ...g, entries: g.entries.map((en, j) => (j === ei ? { ...en, label: e.target.value } : en)) } : g
-                                )
-                              )
-                            }
+                            onChange={(e) => patchEntry(gi, ei, { label: e.target.value })}
+                            maxLength={120}
                             className="h-10"
                           />
                         </FormField>
@@ -360,21 +619,14 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
                           <TextInput
                             id={`spec-${gi}-${ei}-value`}
                             value={entry.value}
-                            onChange={(e) =>
-                              patchSpecs(
-                                draft.specs.map((g, i) =>
-                                  i === gi ? { ...g, entries: g.entries.map((en, j) => (j === ei ? { ...en, value: e.target.value } : en)) } : g
-                                )
-                              )
-                            }
+                            onChange={(e) => patchEntry(gi, ei, { value: e.target.value })}
+                            maxLength={300}
                             className="h-10"
                           />
                         </FormField>
                         <button
                           type="button"
-                          onClick={() =>
-                            patchSpecs(draft.specs.map((g, i) => (i === gi ? { ...g, entries: g.entries.filter((_, j) => j !== ei) } : g)))
-                          }
+                          onClick={() => removeEntry(gi, ei)}
                           aria-label={`Remove entry ${entry.label || ei + 1}`}
                           className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
                         >
@@ -385,7 +637,7 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
                   </div>
                   <button
                     type="button"
-                    onClick={() => patchSpecs(draft.specs.map((g, i) => (i === gi ? { ...g, entries: [...g.entries, { label: "", value: "" }] } : g)))}
+                    onClick={() => addEntry(gi)}
                     className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-[0.8rem] font-medium text-muted-foreground transition-colors hover:border-violet-glow/50 hover:text-foreground"
                   >
                     <Plus className="size-3.5" aria-hidden="true" />
@@ -396,7 +648,7 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
             ))}
             <button
               type="button"
-              onClick={() => patchSpecs([...draft.specs, { title: "New group", entries: [{ label: "", value: "" }] }])}
+              onClick={addGroup}
               className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-line px-4 text-sm font-medium text-foreground transition-colors hover:border-violet-glow/50"
             >
               <Plus className="size-4" aria-hidden="true" />
@@ -406,59 +658,98 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
 
           {/* Images */}
           <TabsContent value="images" className="mt-4">
-            <FormSection title="Images" description="Ordered image paths; the first entry is the primary card image.">
-              <div className="space-y-2.5">
-                {draft.images.map((image, i) => (
-                  <div key={`${image}-${i}`} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <FormField label={`Image ${i + 1}${i === 0 ? " (primary)" : ""}`} htmlFor={`img-${i}`}>
-                      <TextInput
-                        id={`img-${i}`}
-                        value={image}
-                        onChange={(e) => patchImage(i, e.target.value)}
-                        className="h-10 font-mono text-[0.82rem]"
-                      />
-                    </FormField>
-                    <button
-                      type="button"
-                      onClick={() => removeImage(i)}
-                      aria-label={`Remove image ${i + 1}`}
-                      className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
-                    >
-                      <Trash2 className="size-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                ))}
-                {draft.images.length === 0 && (
-                  <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-[0.84rem] text-muted-foreground">
-                    No image paths — add at least one primary image.
-                  </p>
-                )}
+            <FormSection
+              title="Images"
+              description="Ordered library assets — the first entry is the primary card image. Reorder with the arrows."
+              actions={
                 <button
                   type="button"
-                  onClick={addImage}
+                  onClick={() => setPickerOpen(true)}
                   className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-[0.8rem] font-medium text-muted-foreground transition-colors hover:border-violet-glow/50 hover:text-foreground"
                 >
-                  <Plus className="size-3.5" aria-hidden="true" />
-                  Add image path
+                  <ImagePlus className="size-3.5" aria-hidden="true" />
+                  Pick from library
                 </button>
-                <p className="text-[0.78rem] text-warning">Image paths are stored as URLs — manage uploads in the media library. Local development mode: files are not uploaded to object storage yet.</p>
+              }
+            >
+              <div className="space-y-2.5">
+                {state.images.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-[0.84rem] text-muted-foreground">
+                    No images yet — pick at least one from the media library.
+                  </p>
+                )}
+                {state.images.map((image, i) => (
+                  <div key={`${image.mediaAssetId}-${i}`} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[4rem_minmax(0,1fr)_auto]">
+                    <div className="relative size-16 overflow-hidden rounded-lg border border-line bg-black/30">
+                      {thumbsBroken.has(image.mediaAssetId) ? (
+                        <span className="flex h-full w-full items-center justify-center text-[0.6rem] text-muted-foreground">broken</span>
+                      ) : (
+                        <img
+                          src={image.url}
+                          alt={image.alt ?? `Product image ${i + 1}`}
+                          className="h-full w-full object-cover"
+                          onError={() =>
+                            setThumbsBroken((prev) => {
+                              if (prev.has(image.mediaAssetId)) return prev;
+                              const next = new Set(prev);
+                              next.add(image.mediaAssetId);
+                              return next;
+                            })
+                          }
+                        />
+                      )}
+                    </div>
+                    <FormField label={`Image ${i + 1}${i === 0 ? " (primary)" : ""} — alt text`} htmlFor={`img-${i}-alt`}>
+                      <TextInput
+                        id={`img-${i}-alt`}
+                        value={image.alt ?? ""}
+                        onChange={(e) =>
+                          patch({ images: state.images.map((img, j) => (j === i ? { ...img, alt: e.target.value } : img)) })
+                        }
+                        maxLength={300}
+                        placeholder="Describe the image for assistive tech"
+                      />
+                    </FormField>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moveImage(i, -1)}
+                        disabled={i === 0}
+                        aria-label={`Move image ${i + 1} up`}
+                        className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground disabled:opacity-30"
+                      >
+                        <ArrowUp className="size-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveImage(i, 1)}
+                        disabled={i === state.images.length - 1}
+                        aria-label={`Move image ${i + 1} down`}
+                        className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground disabled:opacity-30"
+                      >
+                        <ArrowDown className="size-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => patch({ images: state.images.filter((_, j) => j !== i) })}
+                        aria-label={`Remove image ${i + 1}`}
+                        className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[0.76rem] text-muted-foreground">
+                  Images always reference uploaded media-library assets — external URLs are not supported, keeping the
+                  library the single source of truth.
+                </p>
               </div>
             </FormSection>
           </TabsContent>
 
-          {/* Warnings & documents */}
-          <TabsContent value="warnings" className="mt-4 space-y-4">
-            <FormSection title="Warnings" description="One warning per line — rendered in the public safety block.">
-              <TextArea
-                aria-label="Warnings, one per line"
-                rows={6}
-                value={warningsText}
-                onChange={(e) => {
-                  setWarningsText(e.target.value);
-                  touch();
-                }}
-              />
-            </FormSection>
+          {/* Documents */}
+          <TabsContent value="documents" className="mt-4">
             <FormSection
               title="Documents"
               description="PDFs and web references attached to the product page."
@@ -474,36 +765,104 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
               }
             >
               <div className="space-y-2.5">
-                {draft.documents.length === 0 && (
+                {state.documents.length === 0 && (
                   <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-[0.84rem] text-muted-foreground">
                     No documents attached.
                   </p>
                 )}
-                {draft.documents.map((doc) => (
-                  <div key={doc.id} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[minmax(0,1.7fr)_8.5rem_auto]">
-                    <FormField label="Title" htmlFor={`${doc.id}-title`}>
+                {state.documents.map((doc, i) => (
+                  <div key={doc.id ?? `new-${i}`} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[minmax(0,1.4fr)_7.5rem_minmax(0,1.4fr)_auto]">
+                    <FormField label="Title" htmlFor={`doc-${i}-title`}>
                       <TextInput
-                        id={`${doc.id}-title`}
+                        id={`doc-${i}-title`}
                         value={doc.title}
-                        onChange={(e) => patchDoc(doc.id, { title: e.target.value })}
+                        onChange={(e) => patchDoc(i, { title: e.target.value })}
+                        maxLength={200}
                         className="h-10"
                       />
                     </FormField>
-                    <FormField label="Type" htmlFor={`${doc.id}-type`}>
+                    <FormField label="Type" htmlFor={`doc-${i}-type`}>
                       <Select
-                        id={`${doc.id}-type`}
+                        id={`doc-${i}-type`}
                         value={doc.type}
-                        onChange={(e) => patchDoc(doc.id, { type: e.target.value as "pdf" | "web" })}
+                        onChange={(e) => patchDoc(i, { type: e.target.value as "pdf" | "web" })}
                         className="h-10"
                       >
                         <option value="pdf">PDF</option>
                         <option value="web">Web</option>
                       </Select>
                     </FormField>
+                    <FormField label="Link (href)" htmlFor={`doc-${i}-href`}>
+                      <TextInput
+                        id={`doc-${i}-href`}
+                        value={doc.href ?? ""}
+                        onChange={(e) => patchDoc(i, { href: e.target.value })}
+                        maxLength={600}
+                        className="h-10 font-mono text-[0.8rem]"
+                        placeholder="/documents/… or https://…"
+                      />
+                    </FormField>
                     <button
                       type="button"
-                      onClick={() => removeDoc(doc.id)}
-                      aria-label={`Remove document ${doc.title}`}
+                      onClick={() => removeDoc(i)}
+                      aria-label={`Remove document ${doc.title || i + 1}`}
+                      className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </button>
+                    <FormField label="Note" htmlFor={`doc-${i}-note`} className="sm:col-span-3">
+                      <TextInput
+                        id={`doc-${i}-note`}
+                        value={doc.note ?? ""}
+                        onChange={(e) => patchDoc(i, { note: e.target.value })}
+                        maxLength={300}
+                        className="h-10"
+                        placeholder="Optional note shown beside the document"
+                      />
+                    </FormField>
+                  </div>
+                ))}
+              </div>
+            </FormSection>
+          </TabsContent>
+
+          {/* Warnings & conformity */}
+          <TabsContent value="compliance" className="mt-4 space-y-4">
+            <FormSection
+              title="Warnings"
+              description="Safety lines rendered in the public product safety block."
+              actions={
+                <button
+                  type="button"
+                  onClick={addWarning}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-[0.8rem] font-medium text-muted-foreground transition-colors hover:border-violet-glow/50 hover:text-foreground"
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Add warning
+                </button>
+              }
+            >
+              <div className="space-y-2.5">
+                {state.warnings.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-[0.84rem] text-muted-foreground">
+                    No warnings — add at least the UAE nicotine warning for restricted products.
+                  </p>
+                )}
+                {state.warnings.map((warning, i) => (
+                  <div key={i} className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <FormField label={`Warning ${i + 1}`} htmlFor={`warning-${i}`}>
+                      <TextInput
+                        id={`warning-${i}`}
+                        value={warning}
+                        onChange={(e) => patchWarning(i, e.target.value)}
+                        maxLength={300}
+                        className="h-10"
+                      />
+                    </FormField>
+                    <button
+                      type="button"
+                      onClick={() => removeWarning(i)}
+                      aria-label={`Remove warning ${i + 1}`}
                       className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
                     >
                       <Trash2 className="size-4" aria-hidden="true" />
@@ -512,10 +871,7 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
                 ))}
               </div>
             </FormSection>
-          </TabsContent>
 
-          {/* Conformity */}
-          <TabsContent value="conformity" className="mt-4">
             <FormSection
               title="Conformity"
               description="Regulatory requirements and their verification state — feeds the public compliance block."
@@ -531,7 +887,12 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
               }
             >
               <div className="space-y-2.5">
-                {draft.conformity.map((row, i) => (
+                {state.conformity.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-[0.84rem] text-muted-foreground">
+                    No conformity entries yet.
+                  </p>
+                )}
+                {state.conformity.map((row, i) => (
                   <div
                     key={`${row.label}-${i}`}
                     className="grid grid-cols-1 items-end gap-2.5 rounded-xl border border-line bg-white/[0.02] p-3 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_9.5rem_auto]"
@@ -541,6 +902,7 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
                         id={`conf-${i}-label`}
                         value={row.label}
                         onChange={(e) => patchConformity(i, { label: e.target.value })}
+                        maxLength={200}
                         className="h-10"
                       />
                     </FormField>
@@ -549,6 +911,7 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
                         id={`conf-${i}-detail`}
                         value={row.detail ?? ""}
                         onChange={(e) => patchConformity(i, { detail: e.target.value })}
+                        maxLength={500}
                         className="h-10"
                       />
                     </FormField>
@@ -569,7 +932,7 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
                     <button
                       type="button"
                       onClick={() => removeConformity(i)}
-                      aria-label={`Remove requirement ${row.label}`}
+                      aria-label={`Remove requirement ${row.label || i + 1}`}
                       className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
                     >
                       <Trash2 className="size-4" aria-hidden="true" />
@@ -586,81 +949,155 @@ export function ProductEditorView({ item }: { item: CatalogItem }) {
           <section className="space-y-3.5 rounded-2xl border border-line bg-elevated/50 p-5">
             <h2 className="font-display text-[1rem] font-semibold text-foreground">Status</h2>
             <FormField label="Publish status" htmlFor="p-status">
-              <Select
-                id="p-status"
-                value={status}
-                onChange={(e) => {
-                  setStatus(e.target.value as "draft" | "published");
-                  touch();
-                }}
-              >
+              <Select id="p-status" value={state.status} onChange={(e) => patch({ status: e.target.value as "draft" | "published" })}>
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
               </Select>
             </FormField>
-            <StatusBadge tone={status === "published" ? "success" : "neutral"}>
-              {status === "published" ? "Published" : "Draft"}
+            <StatusBadge tone={state.status === "published" ? "success" : "neutral"}>
+              {state.status === "published" ? "Published" : "Draft"}
             </StatusBadge>
             <button
               type="button"
-              onClick={onSave}
-              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary text-sm font-medium text-primary-foreground transition-all hover:brightness-110"
+              onClick={() => void onSave()}
+              disabled={saving}
+              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-primary text-sm font-medium text-primary-foreground transition-all hover:brightness-110 disabled:opacity-60"
             >
               <Save className="size-4" aria-hidden="true" />
-              Save
+              {saving ? "Saving…" : "Save"}
             </button>
             <p className="text-[0.74rem] leading-relaxed text-muted-foreground">
-              Saving persists to the catalog database and search index — storefront pages update immediately.
+              Saving persists every tab, bumps the record version and reindexes storefront search.
             </p>
           </section>
 
           <section className="space-y-3.5 rounded-2xl border border-line bg-elevated/50 p-5">
-            <h2 className="font-display text-[1rem] font-semibold text-foreground">Availability</h2>
-            <FormField label="Storefront availability" htmlFor="p-availability">
+            <h2 className="font-display text-[1rem] font-semibold text-foreground">Pricing &amp; flags</h2>
+            <FormField label="Price (AED)" htmlFor="p-price" error={priceError ?? undefined}>
+              <TextInput
+                id="p-price"
+                type="number"
+                min={0}
+                step="0.01"
+                value={state.price}
+                onChange={(e) => setPrice(e.target.value)}
+                invalid={priceError !== null}
+              />
+            </FormField>
+            <FormField label="Compare-at price (AED)" htmlFor="p-compare" hint="Leave blank for no strikethrough “was” price.">
+              <TextInput
+                id="p-compare"
+                type="number"
+                min={0}
+                step="0.01"
+                value={state.compare}
+                onChange={(e) => {
+                  patch({ compare: e.target.value });
+                  setPriceError(null);
+                }}
+              />
+            </FormField>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[0.84rem] font-medium text-foreground">Featured</span>
+              <Switch checked={state.featured} onCheckedChange={(v) => patch({ featured: v })} aria-label="Featured on storefront" />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[0.84rem] font-medium text-foreground">New</span>
+              <Switch checked={state.isNew} onCheckedChange={(v) => patch({ isNew: v })} aria-label="New badge on storefront" />
+            </div>
+            <FormField label="Low stock threshold" htmlFor="p-low-stock" hint="At or below this on-hand qty the badge turns “Low stock”.">
+              <TextInput
+                id="p-low-stock"
+                type="number"
+                min={0}
+                step={1}
+                value={state.lowStockThreshold}
+                onChange={(e) => patch({ lowStockThreshold: e.target.value })}
+              />
+            </FormField>
+          </section>
+
+          <section className="space-y-3.5 rounded-2xl border border-line bg-elevated/50 p-5">
+            <h2 className="font-display text-[1rem] font-semibold text-foreground">Availability &amp; stock</h2>
+            <FormField label="Storefront availability" htmlFor="p-availability" hint="Only “Unavailable” is editorial — other states derive from stock on hand.">
               <Select
                 id="p-availability"
-                value={availability}
-                onChange={(e) => {
-                  setAvailability(e.target.value as Availability);
-                  touch();
-                }}
+                value={state.availability}
+                onChange={(e) => patch({ availability: e.target.value as Availability })}
               >
-                <option value="in_stock">In stock</option>
-                <option value="low_stock">Low stock</option>
-                <option value="out_of_stock">Out of stock</option>
-                <option value="unavailable">Unavailable</option>
+                {AVAILABILITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </Select>
+            </FormField>
+            <FormField label="Stock on hand" htmlFor="p-stock" hint={`Currently ${qtyOnHand} units (product-level). Saving sets the absolute value.`}>
+              <TextInput
+                id="p-stock"
+                type="number"
+                min={0}
+                step={1}
+                value={stockInput}
+                onChange={(e) => setStockInput(e.target.value)}
+                placeholder={String(qtyOnHand)}
+              />
             </FormField>
             <div>
               <p className="mb-1.5 text-[0.74rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Badge preview</p>
-              <AvailabilityBadge availability={availability} />
+              <AvailabilityBadge availability={state.availability} />
             </div>
           </section>
 
           <section className="space-y-3 rounded-2xl border border-error/30 bg-error/[0.04] p-5">
             <h2 className="font-display text-[1rem] font-semibold text-error">Danger zone</h2>
             <p className="text-[0.8rem] leading-relaxed text-muted-foreground">
-              Archiving hides the product from every storefront surface and keeps its history for audit.
+              Deletes the product, its variants, images, specs and documents. Products referenced by orders or saved
+              items cannot be deleted — unpublish those instead.
             </p>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="block">
-                  <button
-                    type="button"
-                    disabled
-                    title="Archiving is not available in this console yet"
-                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-error/40 text-sm font-medium text-error"
-                  >
-                    <Archive className="size-4" aria-hidden="true" />
-                    Archive product
-                  </button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Archiving is not available in this console yet</TooltipContent>
-            </Tooltip>
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-error/40 text-sm font-medium text-error transition-colors hover:bg-error/10"
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+              Delete product
+            </button>
           </section>
         </aside>
       </div>
+
+      <MediaPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onSelect={(asset) => addImages([asset])}
+        title="Pick product images"
+      />
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{detail.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the product from the catalog — including its variants, images, specs and
+              documents. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={(e) => {
+                e.preventDefault();
+                void onDelete();
+              }}
+              className="bg-error text-white hover:bg-error/90"
+            >
+              {deleting ? "Deleting…" : "Delete product"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -86,7 +86,7 @@ export const accountService = {
     };
   },
 
-  async register(payload: { email: string; password: string; displayName: string }): Promise<AuthResult> {
+  async register(payload: { email: string; password: string; displayName: string; marketingOptIn?: boolean }): Promise<AuthResult> {
     const response = await fetch("/api/v1/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -103,7 +103,13 @@ export const accountService = {
 
   async signOut(): Promise<AuthResult> {
     await fetch("/api/v1/auth/sign-out", { method: "POST" });
+    // Drop user-scoped client state — the stale cart/saved caches would
+    // otherwise bleed into the next session on this browser.
     useAuth.getState().setAuth(null, false);
+    const { useCart } = await import("@/services/cart");
+    const { useSavedItems } = await import("@/services/saved-items");
+    useCart.getState().setLines([]);
+    useSavedItems.getState().setItems([]);
     return { ok: true, message: "Signed out." };
   },
 

@@ -15,6 +15,3 @@ export function filsToAED(fils: number): number {
 }
 
 /** Safe addition of fil amounts (avoids float drift in the AED domain). */
-export function sumFils(...amounts: number[]): number {
-  return amounts.reduce((sum, a) => sum + Math.round(a), 0);
-}

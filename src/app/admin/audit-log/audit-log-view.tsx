@@ -46,37 +46,102 @@ function TableSkeleton({ rows = 6 }: { rows?: number }) {
 
 const PAGE_SIZE = 6;
 
+/** CSV row — the API adds actorType/actorLabel/targetType/targetId passthrough fields. */
+interface AuditCsvRow extends AuditEvent {
+  actorType?: string;
+  actorLabel?: string;
+  targetType?: string;
+  targetId?: string;
+}
+
+function csvField(value: unknown): string {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+/**
+ * Pull up to 500 audit events matching the ACTIVE filters (paged via the audit
+ * API at 48 rows per page) and build the CSV export. The loop stops when a
+ * page comes back short or the row cap is hit.
+ */
+async function fetchAuditRowsForExport(search: string, severity: AuditSeverity | "all"): Promise<AuditCsvRow[]> {
+  const EXPORT_PAGE_SIZE = 48;
+  const MAX_ROWS = 500;
+  const rows: AuditCsvRow[] = [];
+  const seen = new Set<string>();
+  for (let page = 1; rows.length < MAX_ROWS; page += 1) {
+    const result = await adminService.auditLog({ search, severity, page, pageSize: EXPORT_PAGE_SIZE });
+    if (result.items.length === 0) break;
+    for (const event of result.items) {
+      if (seen.has(event.id)) continue;
+      seen.add(event.id);
+      rows.push(event as AuditCsvRow);
+      if (rows.length >= MAX_ROWS) break;
+    }
+    if (result.items.length < EXPORT_PAGE_SIZE) break; // short page — end of the filtered set
+  }
+  return rows;
+}
+
+function buildAuditCsv(rows: AuditCsvRow[]): string {
+  const header = ["id", "at", "actorType", "actorLabel", "action", "severity", "targetType", "targetId", "detail"];
+  const lines = [header.map(csvField).join(",")];
+  for (const row of rows) {
+    lines.push(
+      [
+        row.id,
+        row.at,
+        row.actorType ?? "",
+        row.actorLabel ?? row.actor,
+        row.action,
+        row.severity,
+        row.targetType ?? "",
+        row.targetId ?? row.target,
+        row.detail,
+      ]
+        .map(csvField)
+        .join(",")
+    );
+  }
+  return lines.join("\r\n");
+}
+
 export function AuditLogView() {
   const { toast } = useToast();
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [severity, setSeverity] = useState<AuditSeverity | "all">("all");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<AuditEvent | null>(null);
   const [attempt, setAttempt] = useState(0);
 
+  // Debounce keystrokes before they hit the server-paged query.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 220);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     let alive = true;
-    const timer = setTimeout(() => {
-      setState("loading");
-      adminService
-        .auditLog({ search, severity })
-        .then((list) => {
-          if (alive) {
-            setEvents(list);
-            setState("ready");
-          }
-        })
-        .catch(() => {
-          if (alive) setState("error");
-        });
-    }, 220);
+    setState("loading");
+    adminService
+      .auditLog({ search: debouncedSearch, severity, page, pageSize: PAGE_SIZE })
+      .then((result) => {
+        if (alive) {
+          setEvents(result.items);
+          setTotal(result.total);
+          setState("ready");
+        }
+      })
+      .catch(() => {
+        if (alive) setState("error");
+      });
     return () => {
       alive = false;
-      clearTimeout(timer);
     };
-  }, [search, severity, attempt]);
+  }, [debouncedSearch, severity, page, attempt]);
 
   const retry = useCallback(() => setAttempt((a) => a + 1), []);
 
@@ -127,9 +192,8 @@ export function AuditLogView() {
     [openDetail]
   );
 
-  const pageCount = Math.max(1, Math.ceil(events.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
-  const pageRows = events.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const mobileCard = useCallback(
     (e: AuditEvent) => (
@@ -153,12 +217,40 @@ export function AuditLogView() {
     [openDetail]
   );
 
-  const onExport = useCallback(() => {
-    toast({
-      title: "Export not available yet",
-      description: "Audit-log export (CSV/JSON) is not wired into this console yet. No file was generated.",
-    });
-  }, [toast]);
+  const [exporting, setExporting] = useState(false);
+
+  const onExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const rows = await fetchAuditRowsForExport(debouncedSearch, severity);
+      if (rows.length === 0) {
+        toast({ title: "Nothing to export", description: "No audit events matched — the CSV was not generated." });
+        return;
+      }
+      const csv = buildAuditCsv(rows);
+      const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `vapetive-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Export ready",
+        description: `${rows.length} audit event${rows.length === 1 ? "" : "s"} downloaded as CSV.`,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Could not build the CSV — try again.",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [toast, debouncedSearch, severity]);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
@@ -170,9 +262,9 @@ export function AuditLogView() {
             Administrative activity as recorded by the audit service — every admin action on the API is written here.
           </p>
         </div>
-        <Button variant="outline" onClick={onExport}>
+        <Button variant="outline" onClick={() => void onExport()} disabled={exporting}>
           <Download className="size-4" aria-hidden="true" />
-          Export
+          {exporting ? "Exporting…" : "Export"}
         </Button>
       </header>
 
@@ -210,7 +302,7 @@ export function AuditLogView() {
         <>
           <DataTable
             columns={columns}
-            rows={pageRows}
+            rows={events}
             initialSort={{ key: "at", dir: "desc" }}
             caption="Audit events with actor, action, target, severity and source IP"
             mobileCard={mobileCard}
@@ -218,7 +310,7 @@ export function AuditLogView() {
           <div className="flex flex-col items-center gap-2">
             <Pagination page={safePage} pageCount={pageCount} onChange={setPage} ariaLabel="Audit log pages" />
             <p className="text-[0.72rem] text-muted-foreground">
-              Showing {events.length} audit {events.length === 1 ? "event" : "events"}
+              Showing {events.length} of {total} audit {total === 1 ? "event" : "events"}
             </p>
           </div>
         </>

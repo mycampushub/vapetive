@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, CircleDashed, ExternalLink, FileText, LifeBuoy } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleDashed, FileText, LifeBuoy, Mail, MapPin, Phone, UserRound, UsersRound } from "lucide-react";
 import type { OrderDetail, OrderSummary, OrderStatus } from "@/types";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
 import { FormSection } from "@/components/shared/admin-primitives";
@@ -140,6 +140,89 @@ function OrderStatusControl({ reference, currentStatus }: { reference: string; c
   );
 }
 
+/* ------------------------ customer & address ----------------------------- */
+
+function CustomerSection({ detail }: { detail: OrderDetail }) {
+  const { customer, shippingAddress } = detail;
+  if (!customer && !shippingAddress) return null;
+
+  const addressLines = shippingAddress
+    ? [
+        shippingAddress.building ? `${shippingAddress.building}${shippingAddress.apartment ? `, ${shippingAddress.apartment}` : ""}` : shippingAddress.apartment,
+        shippingAddress.street,
+        `${shippingAddress.city}, ${shippingAddress.emirate}`,
+      ].filter(Boolean)
+    : [];
+
+  return (
+    <FormSection
+      title="Customer & delivery address"
+      description="Identity and shipping details captured at checkout."
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        {customer && (
+          <div className="rounded-2xl border border-line bg-white/[0.02] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span
+                  className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-gradient-to-br from-violet-glow/25 to-ice/15 text-[0.72rem] font-bold text-foreground"
+                  aria-hidden="true"
+                >
+                  {customer.name
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((p) => p[0]?.toUpperCase() ?? "")
+                    .join("") || <UserRound className="size-4 text-muted-foreground" />}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">{customer.name}</p>
+                  <p className="mt-0.5 flex items-center gap-1.5 truncate text-[0.8rem] text-muted-foreground">
+                    <Mail className="size-3.5 shrink-0" aria-hidden="true" />
+                    {customer.email}
+                  </p>
+                </div>
+              </div>
+              {customer.isGuest && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line-strong px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <UsersRound className="size-3" aria-hidden="true" />
+                  Guest
+                </span>
+              )}
+            </div>
+            <p className="mt-3 border-t border-line pt-2.5 text-[0.75rem] text-muted-foreground">
+              {customer.isGuest
+                ? "Guest checkout — no customer account is linked to this order."
+                : "Registered customer — the order is attributed to their account."}
+            </p>
+          </div>
+        )}
+
+        {shippingAddress && (
+          <div className="rounded-2xl border border-line bg-white/[0.02] p-4">
+            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Shipping address
+            </p>
+            <div className="mt-2.5 space-y-1.5 text-sm text-foreground">
+              <p className="font-medium">{shippingAddress.fullName}</p>
+              {addressLines.map((line) => (
+                <p key={line} className="flex items-start gap-2 text-[0.86rem] text-muted-foreground">
+                  <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                  {line}
+                </p>
+              ))}
+              <p className="flex items-center gap-2 text-[0.86rem] text-muted-foreground">
+                <Phone className="size-3.5 shrink-0" aria-hidden="true" />
+                {shippingAddress.phone}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </FormSection>
+  );
+}
+
 export function OrderDetailView({ summary, detail }: { summary: OrderSummary; detail: OrderDetail | null }) {
   return (
     <div className="space-y-6">
@@ -221,22 +304,18 @@ export function OrderDetailView({ summary, detail }: { summary: OrderSummary; de
               )}
               <div className="mt-5 flex flex-col gap-2 border-t border-line pt-4">
                 <Link
-                  href={`/account/orders/${detail.reference}`}
-                  className="inline-flex items-center gap-2 text-[0.84rem] font-medium text-violet-soft underline-offset-4 hover:underline"
-                >
-                  View public-facing page
-                  <ExternalLink className="size-3.5" aria-hidden="true" />
-                </Link>
-                <Link
-                  href={detail.supportHref}
+                  href="/admin/support"
                   className="inline-flex items-center gap-2 text-[0.84rem] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 >
                   <LifeBuoy className="size-3.5" aria-hidden="true" />
-                  Customer support
+                  Open support inbox
                 </Link>
               </div>
             </FormSection>
           </div>
+
+          {/* Customer identity + shipping address */}
+          <CustomerSection detail={detail} />
 
           {/* Items */}
           <FormSection title={`Items (${detail.items.length})`} description="Line items as recorded on the order.">
@@ -300,18 +379,11 @@ export function OrderDetailView({ summary, detail }: { summary: OrderSummary; de
           </dl>
           <div className="mt-5 flex flex-col gap-2 border-t border-line pt-4">
             <Link
-              href={`/account/orders/${summary.reference}`}
-              className="inline-flex items-center gap-2 text-[0.84rem] font-medium text-violet-soft underline-offset-4 hover:underline"
-            >
-              View public-facing page
-              <ExternalLink className="size-3.5" aria-hidden="true" />
-            </Link>
-            <Link
-              href="/contact"
+              href="/admin/support"
               className="inline-flex items-center gap-2 text-[0.84rem] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
               <LifeBuoy className="size-3.5" aria-hidden="true" />
-              Customer support
+              Open support inbox
             </Link>
           </div>
         </FormSection>

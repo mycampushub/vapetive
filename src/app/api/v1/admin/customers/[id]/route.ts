@@ -6,6 +6,8 @@ import { logAudit } from "@/server/audit";
 
 const patchSchema = z.object({
   status: z.enum(["active", "suspended", "pending"]),
+  /** Optional free-text justification, surfaced in the audit trail. */
+  reason: z.string().trim().max(200).optional(),
 });
 
 export const PATCH = withApi(
@@ -34,7 +36,9 @@ export const PATCH = withApi(
       targetType: "user",
       targetId: params.id,
       severity: "warning",
-      detail: `Customer status set to ${body.status}`,
+      detail: body.reason
+        ? `Customer status set to ${body.status} — ${body.reason}`
+        : `Customer status set to ${body.status}`,
       after: { status: body.status },
       ip: meta.ip,
     });

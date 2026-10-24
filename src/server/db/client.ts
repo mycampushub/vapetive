@@ -121,9 +121,5 @@ export async function getDb(): Promise<DbClient> {
 }
 
 /** Test/seed helper: reset the cached client (e.g. after DB file swap). */
-export function resetDbClient(): void {
-  cached = null;
-  initPromise = null;
-}
 
 export { APP_ENV };

@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Ban, FileClock, LifeBuoy, Package, ShieldCheck, ShieldOff, ShieldQuestion } from "lucide-react";
 import type { AdminCustomer, OrderSummary, SupportTicket } from "@/types";
+import { adminService } from "@/services/admin";
 import { StatusBadge, OrderStatusBadge, TicketStatusBadge } from "@/components/shared/status-badge";
 import { FormSection } from "@/components/shared/admin-primitives";
 import { PrototypeNotice } from "@/components/shared/prototype-notice";
@@ -19,6 +21,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { TextInput } from "@/components/forms/fields";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -39,24 +42,52 @@ export function CustomerDetailView({
   relatedTickets: SupportTicket[];
 }) {
   const { toast } = useToast();
-  const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
-  const [simulatedSuspended, setSimulatedSuspended] = useState(false);
+  const router = useRouter();
+  const [status, setStatus] = useState<AdminCustomer["status"]>(customer.status);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const onSimulateSuspend = useCallback(() => {
-    setSuspendDialogOpen(false);
-    setSimulatedSuspended(true);
-    toast({
-      title: "Suspension not connected",
-      description: "Account suspension is not wired into this console yet. No record was changed.",
-    });
-  }, [toast]);
+  const isSuspended = status === "suspended";
 
-  const isSuspended = customer.status === "suspended" || simulatedSuspended;
+  const applyStatus = useCallback(
+    async (next: "active" | "suspended") => {
+      setBusy(true);
+      try {
+        await adminService.updateCustomer(customer.id, {
+          status: next,
+          reason: reason.trim() || undefined,
+        });
+        setStatus(next);
+        setDialogOpen(false);
+        setReason("");
+        toast({
+          title: next === "suspended" ? "Account suspended" : "Account reactivated",
+          description:
+            next === "suspended"
+              ? `${customer.name} can no longer sign in — the change is written to the account record.`
+              : `${customer.name} can sign in again.`,
+        });
+        // Keep the server-rendered bundle (orders, tickets) in sync.
+        router.refresh();
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Update failed",
+          description: error instanceof Error ? error.message : "Please try again.",
+        });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [customer.id, customer.name, reason, router, toast]
+  );
 
   return (
     <div className="space-y-6">
       <PrototypeNotice>
-        Customer detail reads live records — profile, attributed orders and linked tickets come straight from the database.
+        Customer detail reads live records — profile, attributed orders and linked tickets come straight from the
+        database. Suspend / reactivate writes to the account record via the customers API.
       </PrototypeNotice>
 
       {/* Profile */}
@@ -71,7 +102,7 @@ export function CustomerDetailView({
               <p className="text-sm text-muted-foreground">{customer.email}</p>
             </div>
           </div>
-          <CustomerStatusBadge status={customer.status} />
+          <CustomerStatusBadge status={status} />
         </div>
         <dl className="mt-5 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
           <div>
@@ -195,13 +226,47 @@ export function CustomerDetailView({
           Danger zone
         </h2>
         <p className="mt-1 text-[0.82rem] text-muted-foreground">
-          Confirming flags the account in this view only — suspension is not written to the accounts service yet.
+          {isSuspended
+            ? "This account is suspended — the customer cannot sign in, place orders or use saved items."
+            : "Suspending writes to the account record immediately: sign-in is blocked and the status is audited. Staff accounts are managed through Users, not here."}
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {isSuspended ? (
-            <StatusBadge tone="error" icon={ShieldOff}>Account suspended</StatusBadge>
+            <>
+              <StatusBadge tone="error" icon={ShieldOff}>Account suspended</StatusBadge>
+              <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline">
+                    <ShieldCheck className="size-4" aria-hidden="true" />
+                    Reactivate account
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reactivate {customer.name}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      The customer regains access to their account, orders and saved items. The change is written to
+                      the account record immediately.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-success text-white hover:bg-success/90"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        void applyStatus("active");
+                      }}
+                    >
+                      {busy ? "Reactivating…" : "Confirm reactivation"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
           ) : (
-            <AlertDialog open={suspendDialogOpen} onOpenChange={setSuspendDialogOpen}>
+            <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive">
                   <Ban className="size-4" aria-hidden="true" />
@@ -212,14 +277,33 @@ export function CustomerDetailView({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Suspend {customer.name}?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    The customer would lose access to their account and saved items. Suspension is not wired into
-                    this console yet — confirming changes no records.
+                    The customer loses access to their account and saved items. This writes to the account record
+                    immediately and is recorded in the audit log. Staff accounts cannot be suspended here.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+                <div className="grid gap-2">
+                  <label htmlFor="suspend-reason" className="text-[0.78rem] font-medium text-foreground">
+                    Reason (optional — stored with the audit entry)
+                  </label>
+                  <TextInput
+                    id="suspend-reason"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="e.g. Chargeback investigation"
+                    maxLength={200}
+                  />
+                </div>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction className="bg-error text-white hover:bg-error/90" onClick={onSimulateSuspend}>
-                    Confirm suspension
+                  <AlertDialogAction
+                    className="bg-error text-white hover:bg-error/90"
+                    disabled={busy}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void applyStatus("suspended");
+                    }}
+                  >
+                    {busy ? "Suspending…" : "Confirm suspension"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

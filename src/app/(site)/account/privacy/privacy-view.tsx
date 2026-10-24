@@ -17,6 +17,7 @@ import { LoadingIndicator } from "@/components/shared/loading-indicator";
 import { ErrorState } from "@/components/shared/error-state";
 import { useToast } from "@/hooks/use-toast";
 import { accountService } from "@/services/account";
+import { formatDate } from "@/lib/format";
 import type { UserProfile } from "@/types";
 
 type LoadState =
@@ -108,7 +109,7 @@ export function PrivacyView() {
             { label: "Email", value: profile.email },
             { label: "Phone", value: profile.phone ?? "—" },
             { label: "Locale", value: profile.locale },
-            { label: "Member since", value: profile.joinedAt },
+            { label: "Member since", value: formatDate(profile.joinedAt) },
             { label: "Profile id", value: profile.id },
           ].map((row) => (
             <div key={row.label} className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0 last:pb-0">

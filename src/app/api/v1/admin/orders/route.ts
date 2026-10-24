@@ -7,14 +7,8 @@ export const GET = withApi({ requirePermission: "orders.read" }, async ({ reques
     status: searchParams.get("status") ?? undefined,
     search: searchParams.get("q") ?? undefined,
     page: Number(searchParams.get("page") ?? 1) || 1,
-    pageSize: Number(searchParams.get("pageSize") ?? 20) || 20,
+    pageSize: Number(searchParams.get("pageSize") ?? 24) || 24,
   });
-  return ok(page.items, {
-    pagination: {
-      page: page.page,
-      pageSize: page.pageSize,
-      total: page.total,
-      hasMore: page.hasMore,
-    },
-  });
+  // Contract (adminService.orders): { items, total }.
+  return ok({ items: page.items, total: page.total });
 });

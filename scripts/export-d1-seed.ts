@@ -244,6 +244,12 @@ closeLocalDb();
 /* --------------------------------- summary -------------------------------- */
 
 console.log("✓ D1 seed export complete");
+if (!process.env.ADMIN_PASSWORD) {
+  console.log("");
+  console.log("⚠ ADMIN_PASSWORD was not set when the local DB was seeded — the exported");
+  console.log("  admin hash derives from the documented default password. Rotate it right");
+  console.log("  after applying this dump: bun run admin:password:set:remote");
+}
 for (const name of ordered) {
   const t = tables.find((x) => x.name === name)!;
   console.log(`  ${String(t.rows.length).padStart(6)}  ${name}`);

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PrivacyPage() {
-  await requireAccountSession();
+  await requireAccountSession("/account/privacy");
   return (
     <AccountPage
       title="Your privacy"

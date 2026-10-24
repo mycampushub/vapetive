@@ -64,10 +64,14 @@ export function RegisterView() {
     }
     setSubmitting(true);
     try {
+      // Safe derived display name: a single-character local part (e.g. "a@…")
+      // would fail the server's min-2 validation, so fall back to "Customer".
+      const local = values.email.split("@")[0] || "";
       const result = await accountService.register({
         email: values.email,
         password: values.password,
-        displayName: values.email.split("@")[0] || "Customer",
+        displayName: local.length >= 2 ? local : "Customer",
+        marketingOptIn: values.productUpdates,
       });
       setSuccess(result.message);
     } catch {

@@ -19,7 +19,7 @@ import {
 /** Maximum units per line accepted by the checkout API. */
 const MAX_QTY = 99;
 
-/** Fallback estimate constants — the live values come from /api/v1/site/config. */
+/** Fallback estimate constants — the live values come from /api/v1/checkout/config. */
 export const FREE_DELIVERY_THRESHOLD = 200;
 export const STANDARD_DELIVERY_FEE = 25;
 export const EXPRESS_DELIVERY_FEE = 35;
@@ -180,10 +180,24 @@ export async function hydrateCartFromServer(): Promise<void> {
   }
 }
 
+/** Optional live-fee override from GET /api/v1/checkout/config (AED units). */
+export interface DeliveryFeeConfigOverride {
+  freeThreshold: number;
+  standardFee: number;
+  expressFee: number;
+}
+
 /** Delivery fee estimate for a subtotal under a chosen method (client estimate). */
-export function deliveryFeeFor(subtotal: number, method: DeliveryMethod = "standard"): number {
-  if (method === "express") return EXPRESS_DELIVERY_FEE;
-  return subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
+export function deliveryFeeFor(
+  subtotal: number,
+  method: DeliveryMethod = "standard",
+  config?: Partial<DeliveryFeeConfigOverride>
+): number {
+  const freeThreshold = config?.freeThreshold ?? FREE_DELIVERY_THRESHOLD;
+  const standardFee = config?.standardFee ?? STANDARD_DELIVERY_FEE;
+  const expressFee = config?.expressFee ?? EXPRESS_DELIVERY_FEE;
+  if (method === "express") return expressFee;
+  return subtotal >= freeThreshold ? 0 : standardFee;
 }
 
 const isProductBlocked = (availability: Availability): boolean =>
@@ -218,8 +232,11 @@ function resolveLine(line: CartLine): CartLineDetail | null {
     product,
     variant,
     qty: line.qty,
-    unitPrice: product.price,
-    lineTotal: product.price * line.qty,
+    // Variant price deltas are part of the authoritative unit price (server
+    // repos/cart.ts resolves the same way) — omitting them would understate
+    // every displayed total vs what the order charges.
+    unitPrice: product.price + (variant?.priceDelta ?? 0),
+    lineTotal: (product.price + (variant?.priceDelta ?? 0)) * line.qty,
     blocked,
     blockedReason,
   };

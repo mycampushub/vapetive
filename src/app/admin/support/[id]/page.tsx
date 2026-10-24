@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { getCurrentIdentity } from "@/server/auth-context";
+import { hasPermission } from "@/server/rbac";
 import { getTicket } from "@/server/repos/support";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TicketDetailView } from "./ticket-detail-view";
@@ -8,6 +11,10 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminTicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // Per-page permission gate (QA audit): ticket records require support.read.
+  const identity = await getCurrentIdentity();
+  if (!identity || !hasPermission(identity.roles, "support.read")) redirect("/admin");
+
   const { id } = await params;
   const key = decodeURIComponent(id);
   const ticket = await getTicket(key);

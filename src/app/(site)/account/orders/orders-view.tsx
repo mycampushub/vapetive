@@ -120,6 +120,10 @@ export function OrdersView() {
   const [query, setQuery] = useState<OrderQuery>(initialQuery);
   const [result, setResult] = useState<ListState>({ key: "all-1-0", state: "loading" });
   const placedOrders = usePlacedOrders((s) => s.summaries);
+  // References seen in ANY successful server fetch (across pages/filters), so
+  // a session order whose server twin lives on another page is still hidden.
+  // (State, not a ref — the filter reads it during render.)
+  const [seenServerRefs, setSeenServerRefs] = useState<Set<string>>(() => new Set());
 
   const queryKey = `${query.status}-${query.page}-${query.attempt}`;
   const showLoading = result.key !== queryKey || result.state === "loading";
@@ -130,7 +134,14 @@ export function OrdersView() {
     orderHistoryService
       .list({ status: query.status, page: query.page, pageSize: PAGE_SIZE })
       .then((data) => {
-        if (!cancelled) setResult({ key, state: "success", data });
+        if (!cancelled) {
+          setSeenServerRefs((prev) => {
+            const next = new Set(prev);
+            for (const item of data.items) next.add(item.reference);
+            return next;
+          });
+          setResult({ key, state: "success", data });
+        }
       })
       .catch(() => {
         if (!cancelled) setResult({ key, state: "error" });
@@ -149,9 +160,19 @@ export function OrdersView() {
     setQuery((current) => ({ ...current, attempt: current.attempt + 1 }));
   };
 
-  const visiblePlaced = query.status === "all" ? placedOrders : placedOrders.filter((o) => o.status === query.status);
+  // Server rows win over session rows: a placed order is hidden when its
+  // reference exists in the current page's history OR anywhere the customer
+  // has browsed this session (avoids duplicates when the twin is on another
+  // page of results).
+  const serverItems = result.state === "success" ? result.data.items : [];
+  const serverRefs = new Set(serverItems.map((order) => order.reference));
+  const statusMatch = (order: OrderSummary) => query.status === "all" || order.status === query.status;
+  const visiblePlaced = placedOrders.filter(
+    (order) =>
+      statusMatch(order) && !seenServerRefs.has(order.reference) && !serverRefs.has(order.reference),
+  );
   const showPlaced = query.page === 1 && visiblePlaced.length > 0;
-  const serverCount = result.state === "success" ? result.data.items.length : 0;
+  const serverCount = serverItems.length;
   const totalCount = (result.state === "success" ? result.data.total : 0) + visiblePlaced.length;
 
   const pageCount = result.state === "success" ? Math.max(1, Math.ceil(result.data.total / result.data.pageSize)) : 1;

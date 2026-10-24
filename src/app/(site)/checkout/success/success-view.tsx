@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CircleCheckBig, Compass, PackageSearch, ReceiptText } from "lucide-react";
@@ -9,17 +10,59 @@ import { PrototypeNotice } from "@/components/shared/prototype-notice";
 import { WhatsAppOrderButton } from "@/components/shared/whatsapp-order-button";
 import { composeOrderConfirmationMessage, openWhatsApp } from "@/services/whatsapp";
 import { placedOrdersService, usePlacedOrders } from "@/services/placed-orders";
+import { checkoutService } from "@/services/checkout";
+
+/** Server-fetch progress for the current mount (one reference per mount). */
+type ServerFetch = { ref: string; status: "fetching" | "failed" };
 
 export function SuccessView() {
   const searchParams = useSearchParams();
   const reference = searchParams.get("ref");
+  // Keyed by reference so ?ref changes remount the confirmation with fresh
+  // fetch state (the lazy initializer below covers the first render).
+  return <SuccessConfirmation key={reference ?? "none"} reference={reference} />;
+}
+
+function SuccessConfirmation({ reference }: { reference: string | null }) {
   // Subscribe so a simultaneous update (e.g. second tab) re-renders.
   const hydrated = usePlacedOrders((s) => s.hydrated);
   usePlacedOrders((s) => s.summaries);
 
   const record = reference ? placedOrdersService.byReference(reference) : null;
 
-  if (!hydrated) {
+  // Server fallback: when the session cache has no record for ?ref= (order
+  // placed in another tab, or the guest cache was cleared), signed-in
+  // customers get the order fetched from GET /api/v1/checkout/orders/:ref.
+  // Starts as "fetching" via the lazy initializer — no setState is ever
+  // called synchronously inside the effect below.
+  const [serverFetch, setServerFetch] = useState<ServerFetch | null>(() =>
+    reference ? { ref: reference, status: "fetching" } : null
+  );
+
+  useEffect(() => {
+    if (!hydrated || !reference || record) return;
+    if (serverFetch?.status === "failed") return; // terminal for this mount
+    let cancelled = false;
+    checkoutService
+      .fetchPlacedOrder(reference)
+      .then((fetched) => {
+        if (fetched && !placedOrdersService.byReference(reference)) {
+          // Cache it in the session store so reloads don't refetch.
+          placedOrdersService.add(fetched.summary, fetched.detail);
+        }
+        if (!fetched && !cancelled) setServerFetch({ ref: reference, status: "failed" });
+      })
+      .catch(() => {
+        if (!cancelled) setServerFetch({ ref: reference, status: "failed" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, reference, record, serverFetch]);
+
+  const fetching = reference !== null && serverFetch?.status === "fetching";
+
+  if (!hydrated || (reference && !record && fetching)) {
     return (
       <PageContainer width="narrow">
         <div className="flex min-h-[40vh] items-center justify-center">

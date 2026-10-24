@@ -9,6 +9,13 @@
 
 import { getDb } from "@/server/db/client";
 import type {
+  AdminProductDetail,
+  AdminProductImage,
+  AdminProductListResult,
+  AdminProductPatch,
+  AdminProductSpecGroup,
+  AdminProductSummary,
+  AdminProductVariant,
   Availability,
   Brand,
   CatalogCategory,
@@ -21,6 +28,7 @@ import type {
 } from "@/types";
 import type { SortKey } from "@/lib/catalog-sort";
 import { filsToAED } from "@/server/money";
+import { newId } from "@/server/ids";
 
 /* ------------------------------ row mappers ------------------------------ */
 
@@ -404,7 +412,9 @@ export async function listProducts(query: CatalogQueryInput = {}): Promise<Pagin
 
 export async function getProduct(slug: string): Promise<CatalogItem | null> {
   const db = await getDb();
-  const row = await db.get<ProductRow>(`${SELECT_PRODUCT} WHERE p.slug = ?`, [slug]);
+  // Drafts (published_at IS NULL) are console-only — never resolve for the
+  // public catalog, carts or checkout.
+  const row = await db.get<ProductRow>(`${SELECT_PRODUCT} WHERE p.slug = ? AND p.published_at IS NOT NULL`, [slug]);
   if (!row) return null;
   const [item] = await hydrate([row]);
   return item ?? null;
@@ -427,7 +437,7 @@ export async function getProductsBySlugs(slugs: string[]): Promise<CatalogItem[]
     const chunk = unique.slice(i, i + 90);
     const placeholders = chunk.map(() => "?").join(",");
     const rows = await db.all<ProductRow>(
-      `${SELECT_PRODUCT} WHERE p.slug IN (${placeholders})`,
+      `${SELECT_PRODUCT} WHERE p.slug IN (${placeholders}) AND p.published_at IS NOT NULL`,
       chunk
     );
     items.push(...(await hydrate(rows)));
@@ -502,13 +512,785 @@ export async function catalogCounts(): Promise<{ products: number; brands: numbe
   return { products: p?.c ?? 0, brands: b?.c ?? 0, categories: c?.c ?? 0 };
 }
 
-/** Admin editor lookup: product by database id or slug. */
-export async function getProductByIdOrSlug(idOrSlug: string): Promise<CatalogItem | null> {
+/* ========================================================================== */
+/*                             ADMIN — catalog                                */
+/*                                                                            */
+/* Console-facing reads/writes. Money stays in fils end-to-end; the admin UI  */
+/* converts at the boundary. Variants are UPDATE-ONLY (carts reference their  */
+/* ids); images/specs/documents are replace-all.                              */
+/* ========================================================================== */
+
+/* ------------------------------ shared helpers ---------------------------- */
+
+/** Slugify: lowercase, alnum runs → hyphens, trimmed, capped at 80 chars. */
+function slugify(input: string): string {
+  const base = input
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return base || "item";
+}
+
+/** First free `base`, `base-2`, `base-3`… slug in a table (optionally excluding one row). */
+async function uniqueSlug(
+  table: "products" | "brands" | "categories",
+  base: string,
+  excludeId?: string
+): Promise<string> {
   const db = await getDb();
-  const row = await db.get<{ slug: string }>(
-    `SELECT slug FROM products WHERE id = ? OR slug = ?`,
+  let candidate = base;
+  for (let i = 2; i < 500; i++) {
+    const row = excludeId
+      ? await db.get<{ one: number }>(`SELECT 1 AS one FROM ${table} WHERE slug = ? AND id != ?`, [candidate, excludeId])
+      : await db.get<{ one: number }>(`SELECT 1 AS one FROM ${table} WHERE slug = ?`, [candidate]);
+    if (!row) return candidate;
+    candidate = `${base}-${i}`;
+  }
+  return `${base}-${Date.now().toString(36)}`;
+}
+
+/** Shared failure shape so routes map cleanly onto HTTP statuses. */
+export type AdminFailure = { code: "not_found" | "conflict" | "validation"; message: string };
+export type AdminResult<T> = { ok: true; data: T } | { ok: false; failure: AdminFailure };
+
+function failure<T>(code: AdminFailure["code"], message: string): AdminResult<T> {
+  return { ok: false, failure: { code, message } };
+}
+
+function isForeignKeyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /foreign key/i.test(message);
+}
+
+/* ------------------------------- list products ---------------------------- */
+
+export interface AdminProductQuery {
+  q?: string;
+  categoryId?: string;
+  brandId?: string;
+  status?: "all" | "published" | "draft";
+  page?: number;
+  pageSize?: number;
+}
+
+interface AdminProductListRow {
+  id: string;
+  slug: string;
+  name: string;
+  sku: string;
+  brand_id: string;
+  brand_name: string | null;
+  category_id: string;
+  category_name: string | null;
+  price_cents: number;
+  compare_at_cents: number | null;
+  published_at: string | null;
+  is_featured: number;
+  is_new: number;
+  editorial_availability: string | null;
+  low_stock_threshold: number;
+  qty_on_hand: number | null;
+  version: number;
+  updated_at: string;
+}
+
+const ADMIN_PRODUCT_SELECT = `
+  SELECT p.id, p.slug, p.name, p.sku,
+         p.brand_id, b.name AS brand_name,
+         p.category_id, c.name AS category_name,
+         p.price_cents, p.compare_at_cents, p.published_at,
+         p.is_featured, p.is_new, p.editorial_availability,
+         p.low_stock_threshold, p.version, p.updated_at,
+         COALESCE(inv.qty_on_hand, 0) AS qty_on_hand
+  FROM products p
+  LEFT JOIN brands b ON b.id = p.brand_id
+  LEFT JOIN categories c ON c.id = p.category_id
+  LEFT JOIN inventory inv ON inv.product_id = p.id AND inv.variant_id = ''
+`;
+
+function availabilityFrom(row: { editorial_availability: string | null; low_stock_threshold: number; qty_on_hand: number | null }): Availability {
+  if (row.editorial_availability === "unavailable") return "unavailable";
+  const qty = row.qty_on_hand ?? 0;
+  if (qty <= 0) return "out_of_stock";
+  if (qty <= row.low_stock_threshold) return "low_stock";
+  return "in_stock";
+}
+
+function toSummary(row: AdminProductListRow): AdminProductSummary {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    sku: row.sku,
+    brandId: row.brand_id,
+    brandName: row.brand_name ?? "",
+    categoryId: row.category_id,
+    categoryName: row.category_name ?? "",
+    priceCents: row.price_cents,
+    compareAtCents: row.compare_at_cents,
+    published: row.published_at !== null,
+    publishedAt: row.published_at,
+    featured: row.is_featured === 1,
+    isNew: row.is_new === 1,
+    availability: availabilityFrom(row),
+    qtyOnHand: row.qty_on_hand ?? 0,
+    version: row.version,
+    updatedAt: row.updated_at,
+  };
+}
+
+/** Admin product list — includes drafts; search/filter/paginate server-side. */
+export async function adminListProducts(query: AdminProductQuery = {}): Promise<AdminProductListResult> {
+  const db = await getDb();
+  const page = Math.max(1, query.page ?? 1);
+  const pageSize = Math.min(96, Math.max(1, query.pageSize ?? 24));
+
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (query.status === "published") where.push(`p.published_at IS NOT NULL`);
+  else if (query.status === "draft") where.push(`p.published_at IS NULL`);
+  if (query.categoryId) {
+    where.push(`p.category_id = ?`);
+    params.push(query.categoryId);
+  }
+  if (query.brandId) {
+    where.push(`p.brand_id = ?`);
+    params.push(query.brandId);
+  }
+  const q = query.q?.trim();
+  if (q) {
+    where.push(`(p.name LIKE ? OR p.sku LIKE ?)`);
+    params.push(`%${q}%`, `%${q}%`);
+  }
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+
+  const totalRow = await db.get<{ count: number }>(
+    `SELECT COUNT(*) AS count FROM products p ${whereSql}`,
+    params
+  );
+  const total = totalRow?.count ?? 0;
+
+  const rows = await db.all<AdminProductListRow>(
+    `${ADMIN_PRODUCT_SELECT} ${whereSql} ORDER BY p.updated_at DESC, p.name COLLATE NOCASE ASC LIMIT ? OFFSET ?`,
+    [...params, pageSize, (page - 1) * pageSize]
+  );
+
+  return { items: rows.map(toSummary), total, page, pageSize };
+}
+
+/* ------------------------------- get product ------------------------------ */
+
+/** Full admin detail by id or slug — children hydrated for the editor. */
+export async function adminGetProduct(idOrSlug: string): Promise<AdminProductDetail | null> {
+  const db = await getDb();
+  const row = await db.get<AdminProductListRow & {
+    model: string | null;
+    tagline: string;
+    description: string;
+    nicotine_strength: string | null;
+    origin: string | null;
+    age_restricted: number;
+    keywords: string | null;
+    warnings_json: string | null;
+    conformity_json: string | null;
+  }>(
+    `SELECT p.id, p.slug, p.name, p.sku,
+            p.brand_id, b.name AS brand_name,
+            p.category_id, c.name AS category_name,
+            p.price_cents, p.compare_at_cents, p.published_at,
+            p.is_featured, p.is_new, p.editorial_availability,
+            p.low_stock_threshold, p.version, p.updated_at,
+            COALESCE(inv.qty_on_hand, 0) AS qty_on_hand,
+            p.model, p.tagline, p.description, p.nicotine_strength, p.origin,
+            p.age_restricted, p.keywords, p.warnings_json, p.conformity_json
+     FROM products p
+     LEFT JOIN brands b ON b.id = p.brand_id
+     LEFT JOIN categories c ON c.id = p.category_id
+     LEFT JOIN inventory inv ON inv.product_id = p.id AND inv.variant_id = ''
+     WHERE p.id = ? OR p.slug = ?`,
     [idOrSlug, idOrSlug]
   );
   if (!row) return null;
-  return getProduct(row.slug);
+
+  const [imageRows, variantRows, groupRows, documentRows] = await Promise.all([
+    db.all<{ id: string; media_asset_id: string; url: string; alt: string | null }>(
+      `SELECT pi.id, pi.media_asset_id, m.url, pi.alt
+       FROM product_images pi
+       JOIN media_assets m ON m.id = pi.media_asset_id
+       WHERE pi.product_id = ? ORDER BY pi.position`,
+      [row.id]
+    ),
+    db.all<{ id: string; label: string; type: string; swatch: string | null; available: number; price_delta_cents: number }>(
+      `SELECT id, label, type, swatch, available, price_delta_cents
+       FROM product_variants WHERE product_id = ? ORDER BY position`,
+      [row.id]
+    ),
+    db.all<{ id: string; title: string; entry_id: string | null; label: string | null; value: string | null }>(
+      `SELECT g.id, g.title, e.id AS entry_id, e.label, e.value
+       FROM product_spec_groups g
+       LEFT JOIN product_spec_entries e ON e.group_id = g.id
+       WHERE g.product_id = ?
+       ORDER BY g.position, e.position`,
+      [row.id]
+    ),
+    db.all<{ id: string; title: string; type: string; href: string | null; note: string | null }>(
+      `SELECT id, title, type, href, note FROM product_documents WHERE product_id = ? ORDER BY rowid`,
+      [row.id]
+    ),
+  ]);
+
+  const images: AdminProductImage[] = imageRows.map((img) => ({
+    id: img.id,
+    mediaAssetId: img.media_asset_id,
+    url: img.url,
+    alt: img.alt,
+  }));
+
+  const variants: AdminProductVariant[] = variantRows.map((v) => ({
+    id: v.id,
+    label: v.label,
+    type: v.type as AdminProductVariant["type"],
+    swatch: v.swatch,
+    available: v.available === 1,
+    priceDeltaCents: v.price_delta_cents,
+  }));
+
+  const groupsBy = new Map<string, AdminProductSpecGroup>();
+  for (const g of groupRows) {
+    let group = groupsBy.get(g.id);
+    if (!group) {
+      group = { id: g.id, title: g.title, entries: [] };
+      groupsBy.set(g.id, group);
+    }
+    if (g.entry_id && g.label !== null && g.value !== null) {
+      group.entries.push({ id: g.entry_id, label: g.label, value: g.value });
+    }
+  }
+
+  return {
+    ...toSummary(row),
+    model: row.model,
+    tagline: row.tagline,
+    description: row.description,
+    nicotineStrength: row.nicotine_strength,
+    origin: row.origin,
+    ageRestricted: row.age_restricted === 1,
+    keywords: row.keywords,
+    lowStockThreshold: row.low_stock_threshold,
+    warnings: parseJsonArray<string>(row.warnings_json),
+    conformity: parseJsonArray<ConformityInfo>(row.conformity_json),
+    images,
+    variants,
+    specGroups: [...groupsBy.values()],
+    documents: documentRows.map((d) => ({
+      id: d.id,
+      title: d.title,
+      type: d.type as "pdf" | "web",
+      href: d.href,
+      note: d.note,
+    })),
+  };
+}
+
+/* ------------------------------ create product ---------------------------- */
+
+export interface AdminCreateProductInput {
+  name: string;
+  sku: string;
+  categoryId: string;
+  brandId: string;
+  priceCents: number;
+  slug?: string;
+  tagline?: string;
+  description?: string;
+}
+
+/** Creates a DRAFT product (published_at NULL) + inventory + FTS rows atomically. */
+export async function adminCreateProduct(input: AdminCreateProductInput): Promise<AdminResult<{ id: string; slug: string }>> {
+  const db = await getDb();
+
+  const brand = await db.get<{ id: string; name: string }>(`SELECT id, name FROM brands WHERE id = ?`, [input.brandId]);
+  if (!brand) return failure("validation", "Choose a brand that exists.");
+  const category = await db.get<{ id: string }>(`SELECT id FROM categories WHERE id = ?`, [input.categoryId]);
+  if (!category) return failure("validation", "Choose a category that exists.");
+
+  const skuTaken = await db.get<{ id: string }>(`SELECT id FROM products WHERE sku = ?`, [input.sku]);
+  if (skuTaken) return failure("conflict", `SKU "${input.sku}" is already in use by another product.`);
+
+  const slug = await uniqueSlug("products", slugify(input.slug || input.name));
+  const id = newId("prd");
+  const now = new Date().toISOString();
+  const tagline = input.tagline?.trim() || `${input.name} — new listing`;
+  const description = input.description?.trim() || "Full description coming soon.";
+
+  await db.batch([
+    {
+      sql: `INSERT INTO products
+              (id, slug, name, brand_id, category_id, sku, tagline, description,
+               price_cents, published_at, created_at, updated_at, version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 1)`,
+      params: [id, slug, input.name, input.brandId, input.categoryId, input.sku, tagline, description, input.priceCents, now, now],
+    },
+    {
+      sql: `INSERT INTO inventory (product_id, variant_id, qty_on_hand, qty_reserved, updated_at)
+            VALUES (?, '', 0, 0, ?)`,
+      params: [id, now],
+    },
+    {
+      sql: `INSERT INTO product_fts (product_id, name, brand, tagline, description, keywords)
+            VALUES (?, ?, ?, ?, ?, '')`,
+      params: [id, input.name, brand.name, tagline, description],
+    },
+  ]);
+
+  return { ok: true, data: { id, slug } };
+}
+
+/* ------------------------------ update product ---------------------------- */
+
+/**
+ * Full editor patch (AdminProductPatch). Column writes for scalar fields,
+ * replace-all for images/specs/documents, UPDATE-only for variants.
+ * Optimistic concurrency via expectedVersion; FTS is reindexed in-batch.
+ */
+export async function adminUpdateProduct(id: string, patch: AdminProductPatch): Promise<AdminResult<{ version: number }>> {
+  const db = await getDb();
+
+  const row = await db.get<AdminProductListRow & {
+    model: string | null;
+    tagline: string;
+    description: string;
+    nicotine_strength: string | null;
+    origin: string | null;
+    keywords: string | null;
+    brand_name: string | null;
+  }>(
+    `SELECT p.id, p.slug, p.name, p.sku,
+            p.brand_id, b.name AS brand_name,
+            p.category_id, c.name AS category_name,
+            p.price_cents, p.compare_at_cents, p.published_at,
+            p.is_featured, p.is_new, p.editorial_availability,
+            p.low_stock_threshold, p.version, p.updated_at,
+            COALESCE(inv.qty_on_hand, 0) AS qty_on_hand,
+            p.model, p.tagline, p.description, p.nicotine_strength, p.origin, p.keywords
+     FROM products p
+     LEFT JOIN brands b ON b.id = p.brand_id
+     LEFT JOIN categories c ON c.id = p.category_id
+     LEFT JOIN inventory inv ON inv.product_id = p.id AND inv.variant_id = ''
+     WHERE p.id = ? OR p.slug = ?`,
+    [id, id]
+  );
+  if (!row) return failure("not_found", "No product found.");
+
+  if (patch.expectedVersion !== undefined && patch.expectedVersion !== row.version) {
+    return failure("conflict", "Someone else updated this product — reload to continue.");
+  }
+
+  // Category / brand must exist when being changed.
+  let brandName = row.brand_name ?? "";
+  if (patch.brandId !== undefined && patch.brandId !== row.brand_id) {
+    const brand = await db.get<{ id: string; name: string }>(`SELECT id, name FROM brands WHERE id = ?`, [patch.brandId]);
+    if (!brand) return failure("validation", "Choose a brand that exists.");
+    brandName = brand.name;
+  }
+  if (patch.categoryId !== undefined && patch.categoryId !== row.category_id) {
+    const category = await db.get<{ id: string }>(`SELECT id FROM categories WHERE id = ?`, [patch.categoryId]);
+    if (!category) return failure("validation", "Choose a category that exists.");
+  }
+
+  // Money: resolve the final price/compare-at pair and keep the CHECK happy.
+  const finalPriceCents = patch.priceCents ?? row.price_cents;
+  const finalCompareCents =
+    patch.compareAtCents !== undefined ? patch.compareAtCents : row.compare_at_cents;
+  if (finalCompareCents !== null && finalCompareCents < finalPriceCents) {
+    return failure("validation", "Compare-at price must be greater than or equal to the price.");
+  }
+
+  // Images replace-all: every referenced asset must exist (FK is RESTRICT).
+  if (patch.images) {
+    const assetIds = [...new Set(patch.images.map((img) => img.mediaAssetId))];
+    for (let i = 0; i < assetIds.length; i += 90) {
+      const chunk = assetIds.slice(i, i + 90);
+      const placeholders = chunk.map(() => "?").join(",");
+      const found = await db.all<{ id: string }>(
+        `SELECT id FROM media_assets WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
+        chunk
+      );
+      if (found.length !== chunk.length) {
+        return failure("validation", "One of the selected images is no longer in the media library — remove it and save again.");
+      }
+    }
+  }
+
+  // Variants: every id must already belong to this product (UPDATE-only).
+  if (patch.variantUpdates && patch.variantUpdates.length > 0) {
+    const variantRows = await db.all<{ id: string }>(`SELECT id FROM product_variants WHERE product_id = ?`, [row.id]);
+    const owned = new Set(variantRows.map((v) => v.id));
+    for (const update of patch.variantUpdates) {
+      if (!owned.has(update.id)) {
+        return failure("validation", "One of the variants no longer belongs to this product — reload and try again.");
+      }
+    }
+  }
+
+  const now = new Date().toISOString();
+  const statements: Array<{ sql: string; params?: unknown[] }> = [];
+
+  // Product columns (single UPDATE, version bump included).
+  const sets: string[] = [`version = version + 1`, `updated_at = ?`];
+  const setParams: unknown[] = [now];
+  const setColumn = (column: string, value: unknown) => {
+    sets.push(`${column} = ?`);
+    setParams.push(value);
+  };
+  if (patch.name !== undefined) setColumn("name", patch.name);
+  if (patch.model !== undefined) setColumn("model", patch.model);
+  if (patch.tagline !== undefined) setColumn("tagline", patch.tagline);
+  if (patch.description !== undefined) setColumn("description", patch.description);
+  if (patch.priceCents !== undefined) setColumn("price_cents", patch.priceCents);
+  if (patch.compareAtCents !== undefined) setColumn("compare_at_cents", patch.compareAtCents);
+  if (patch.featured !== undefined) setColumn("is_featured", patch.featured ? 1 : 0);
+  if (patch.isNew !== undefined) setColumn("is_new", patch.isNew ? 1 : 0);
+  if (patch.nicotineStrength !== undefined) setColumn("nicotine_strength", patch.nicotineStrength);
+  if (patch.origin !== undefined) setColumn("origin", patch.origin);
+  if (patch.keywords !== undefined) setColumn("keywords", patch.keywords);
+  if (patch.lowStockThreshold !== undefined) setColumn("low_stock_threshold", patch.lowStockThreshold);
+  if (patch.warnings !== undefined) setColumn("warnings_json", JSON.stringify(patch.warnings));
+  if (patch.conformity !== undefined) setColumn("conformity_json", JSON.stringify(patch.conformity));
+  if (patch.brandId !== undefined) setColumn("brand_id", patch.brandId);
+  if (patch.categoryId !== undefined) setColumn("category_id", patch.categoryId);
+  if (patch.setOutOfStock) setColumn("editorial_availability", "unavailable");
+  else if (patch.clearOutOfStock) setColumn("editorial_availability", null);
+  if (patch.publish !== undefined) setColumn("published_at", patch.publish ? (row.published_at ?? now) : null);
+  if (patch.expectedVersion !== undefined) {
+    // CAS predicate: the UPDATE only lands when the version is unchanged.
+    statements.push({
+      sql: `UPDATE products SET ${sets.join(", ")} WHERE id = ? AND version = ?`,
+      params: [...setParams, row.id, row.version],
+    });
+  } else {
+    statements.push({ sql: `UPDATE products SET ${sets.join(", ")} WHERE id = ?`, params: [...setParams, row.id] });
+  }
+
+  // Product-level stock.
+  if (patch.restockQty !== undefined) {
+    statements.push({
+      sql: `INSERT INTO inventory (product_id, variant_id, qty_on_hand, qty_reserved, updated_at)
+            VALUES (?, '', ?, 0, ?)
+            ON CONFLICT(product_id, variant_id) DO UPDATE SET qty_on_hand = excluded.qty_on_hand, updated_at = excluded.updated_at`,
+      params: [row.id, patch.restockQty, now],
+    });
+  }
+
+  // Images replace-all (position = array index).
+  if (patch.images) {
+    statements.push({ sql: `DELETE FROM product_images WHERE product_id = ?`, params: [row.id] });
+    patch.images.forEach((img, index) => {
+      statements.push({
+        sql: `INSERT INTO product_images (id, product_id, media_asset_id, alt, position) VALUES (?, ?, ?, ?, ?)`,
+        params: [newId("img"), row.id, img.mediaAssetId, img.alt ?? null, index],
+      });
+    });
+  }
+
+  // Spec groups replace-all (entries cascade with their group).
+  if (patch.specGroups) {
+    statements.push({ sql: `DELETE FROM product_spec_groups WHERE product_id = ?`, params: [row.id] });
+    patch.specGroups.forEach((group, gi) => {
+      const groupId = newId("spg");
+      statements.push({
+        sql: `INSERT INTO product_spec_groups (id, product_id, title, position) VALUES (?, ?, ?, ?)`,
+        params: [groupId, row.id, group.title, gi],
+      });
+      group.entries.forEach((entry, ei) => {
+        statements.push({
+          sql: `INSERT INTO product_spec_entries (id, group_id, label, value, position) VALUES (?, ?, ?, ?, ?)`,
+          params: [newId("spe"), groupId, entry.label, entry.value, ei],
+        });
+      });
+    });
+  }
+
+  // Documents replace-all.
+  if (patch.documents) {
+    statements.push({ sql: `DELETE FROM product_documents WHERE product_id = ?`, params: [row.id] });
+    patch.documents.forEach((doc) => {
+      statements.push({
+        sql: `INSERT INTO product_documents (id, product_id, title, type, href, note) VALUES (?, ?, ?, ?, ?, ?)`,
+        params: [newId("doc"), row.id, doc.title, doc.type, doc.href ?? null, doc.note ?? null],
+      });
+    });
+  }
+
+  // Variant updates — available / price / label only.
+  if (patch.variantUpdates) {
+    for (const update of patch.variantUpdates) {
+      if (update.label !== undefined) {
+        statements.push({
+          sql: `UPDATE product_variants SET available = ?, price_delta_cents = ?, label = ? WHERE id = ? AND product_id = ?`,
+          params: [update.available ? 1 : 0, update.priceDeltaCents, update.label, update.id, row.id],
+        });
+      } else {
+        statements.push({
+          sql: `UPDATE product_variants SET available = ?, price_delta_cents = ? WHERE id = ? AND product_id = ?`,
+          params: [update.available ? 1 : 0, update.priceDeltaCents, update.id, row.id],
+        });
+      }
+    }
+  }
+
+  // FTS reindex in the same batch — final editorial values are known here.
+  statements.push({
+    sql: `INSERT INTO product_fts (product_id, name, brand, tagline, description, keywords)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(product_id) DO UPDATE SET name = excluded.name, brand = excluded.brand,
+            tagline = excluded.tagline, description = excluded.description, keywords = excluded.keywords`,
+    params: [
+      row.id,
+      patch.name ?? row.name,
+      brandName,
+      patch.tagline ?? row.tagline,
+      patch.description ?? row.description,
+      patch.keywords !== undefined ? (patch.keywords ?? "") : (row.keywords ?? ""),
+    ],
+  });
+
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isForeignKeyError(error)) {
+      return failure("validation", "A referenced record (image, category or brand) no longer exists — reload and try again.");
+    }
+    throw error;
+  }
+
+  const fresh = await db.get<{ version: number }>(`SELECT version FROM products WHERE id = ?`, [row.id]);
+  if (patch.expectedVersion !== undefined && (fresh?.version ?? 0) !== row.version + 1) {
+    return failure("conflict", "Someone else updated this product — reload to continue.");
+  }
+  return { ok: true, data: { version: fresh?.version ?? row.version + 1 } };
+}
+
+/* ------------------------------ delete product ---------------------------- */
+
+export async function adminDeleteProduct(id: string): Promise<AdminResult<{ slug: string; name: string }>> {
+  const db = await getDb();
+  const row = await db.get<{ id: string; slug: string; name: string }>(
+    `SELECT id, slug, name FROM products WHERE id = ? OR slug = ?`,
+    [id, id]
+  );
+  if (!row) return failure("not_found", "No product found.");
+
+  // FKs from cart_items/saved_items CASCADE and order_items SET NULL, so a
+  // bare DELETE would silently wipe customer carts/saved lists and unlink
+  // historical orders. Enforce the documented 409 contract explicitly.
+  const refs = await db.get<{ c: number }>(
+    `SELECT (SELECT COUNT(*) FROM order_items WHERE product_id = ?)
+          +  (SELECT COUNT(*) FROM cart_items WHERE product_id = ?)
+          +  (SELECT COUNT(*) FROM saved_items WHERE product_id = ?) AS c`,
+    [row.id, row.id, row.id]
+  );
+  if ((refs?.c ?? 0) > 0) {
+    return failure("conflict", "This product has orders, carts or saved references — unpublish it instead of deleting.");
+  }
+
+  try {
+    // FTS is external-content: remove the index row before the product.
+    await db.batch([
+      { sql: `DELETE FROM product_fts WHERE product_id = ?`, params: [row.id] },
+      { sql: `DELETE FROM products WHERE id = ?`, params: [row.id] },
+    ]);
+  } catch (error) {
+    if (isForeignKeyError(error)) {
+      return failure("conflict", "This product has orders or saved references — unpublish it instead of deleting.");
+    }
+    throw error;
+  }
+  return { ok: true, data: { slug: row.slug, name: row.name } };
+}
+
+/* ------------------------------ brands (admin) ---------------------------- */
+
+export interface AdminBrandInput {
+  name: string;
+  slug?: string;
+  tagline?: string;
+  blurb?: string;
+  description?: string;
+  origin?: string;
+  established?: string;
+  accent?: Brand["accent"];
+  featured?: boolean;
+}
+
+export async function adminCreateBrand(input: AdminBrandInput): Promise<AdminResult<{ id: string; slug: string }>> {
+  const db = await getDb();
+  const nameTaken = await db.get<{ id: string }>(`SELECT id FROM brands WHERE name = ?`, [input.name]);
+  if (nameTaken) return failure("conflict", `A brand named "${input.name}" already exists.`);
+
+  const slug = await uniqueSlug("brands", slugify(input.slug || input.name));
+  const id = newId("brd");
+  const now = new Date().toISOString();
+  const tagline = input.tagline?.trim() || `${input.name} at Vapetive`;
+  const blurb = input.blurb?.trim() || `Authentic ${input.name} stock, delivered UAE-wide.`;
+
+  await db.batch([
+    {
+      sql: `INSERT INTO brands (id, slug, name, tagline, blurb, description, origin, established, accent, featured, position, created_at, updated_at)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(position), 0) + 1, ?, ? FROM brands`,
+      params: [
+        id,
+        slug,
+        input.name,
+        tagline,
+        blurb,
+        input.description?.trim() || blurb,
+        input.origin?.trim() || null,
+        input.established?.trim() || null,
+        input.accent ?? "violet",
+        input.featured ? 1 : 0,
+        now,
+        now,
+      ],
+    },
+  ]);
+  return { ok: true, data: { id, slug } };
+}
+
+export async function adminUpdateBrand(
+  id: string,
+  patch: Partial<Pick<Brand, "name" | "tagline" | "blurb" | "description" | "origin" | "established" | "accent" | "featured">>
+): Promise<AdminResult<{ id: string }>> {
+  const db = await getDb();
+  const row = await db.get<{ id: string; name: string }>(`SELECT id, name FROM brands WHERE id = ?`, [id]);
+  if (!row) return failure("not_found", "No brand found.");
+
+  if (patch.name !== undefined && patch.name !== row.name) {
+    const taken = await db.get<{ id: string }>(`SELECT id FROM brands WHERE name = ? AND id != ?`, [patch.name, row.id]);
+    if (taken) return failure("conflict", `A brand named "${patch.name}" already exists.`);
+  }
+
+  const sets: string[] = [`updated_at = ?`];
+  const params: unknown[] = [new Date().toISOString()];
+  const setColumn = (column: string, value: unknown) => {
+    sets.push(`${column} = ?`);
+    params.push(value);
+  };
+  if (patch.name !== undefined) setColumn("name", patch.name);
+  if (patch.tagline !== undefined) setColumn("tagline", patch.tagline);
+  if (patch.blurb !== undefined) setColumn("blurb", patch.blurb);
+  if (patch.description !== undefined) setColumn("description", patch.description);
+  if (patch.origin !== undefined) setColumn("origin", patch.origin);
+  if (patch.established !== undefined) setColumn("established", patch.established);
+  if (patch.accent !== undefined) setColumn("accent", patch.accent);
+  if (patch.featured !== undefined) setColumn("featured", patch.featured ? 1 : 0);
+
+  await db.run(`UPDATE brands SET ${sets.join(", ")} WHERE id = ?`, [...params, row.id]);
+  return { ok: true, data: { id: row.id } };
+}
+
+export async function adminDeleteBrand(id: string): Promise<AdminResult<{ id: string }>> {
+  const db = await getDb();
+  const row = await db.get<{ id: string; name: string }>(`SELECT id, name FROM brands WHERE id = ?`, [id]);
+  if (!row) return failure("not_found", "No brand found.");
+
+  const refs = await db.get<{ c: number }>(`SELECT COUNT(*) AS c FROM products WHERE brand_id = ?`, [row.id]);
+  if ((refs?.c ?? 0) > 0) {
+    return failure("conflict", `${refs?.c} product${(refs?.c ?? 0) === 1 ? "" : "s"} still reference this brand — move them to another brand first.`);
+  }
+
+  try {
+    await db.run(`DELETE FROM brands WHERE id = ?`, [row.id]);
+  } catch (error) {
+    if (isForeignKeyError(error)) {
+      return failure("conflict", "Products still reference this brand — move them to another brand first.");
+    }
+    throw error;
+  }
+  return { ok: true, data: { id: row.id } };
+}
+
+/* ---------------------------- categories (admin) --------------------------- */
+
+export interface AdminCategoryInput {
+  name: string;
+  slug?: string;
+  description?: string;
+  longDescription?: string;
+  accent?: CatalogCategory["accent"];
+  featured?: boolean;
+}
+
+export async function adminCreateCategory(input: AdminCategoryInput): Promise<AdminResult<{ id: string; slug: string }>> {
+  const db = await getDb();
+  const slug = await uniqueSlug("categories", slugify(input.slug || input.name));
+  const id = newId("cat");
+  const now = new Date().toISOString();
+  const description = input.description?.trim() || `${input.name} curated by the Vapetive team.`;
+
+  await db.batch([
+    {
+      sql: `INSERT INTO categories (id, slug, name, description, long_description, accent, featured, position, created_at, updated_at)
+            SELECT ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(position), 0) + 1, ?, ? FROM categories`,
+      params: [
+        id,
+        slug,
+        input.name,
+        description,
+        input.longDescription?.trim() || null,
+        input.accent ?? "violet",
+        input.featured ? 1 : 0,
+        now,
+        now,
+      ],
+    },
+  ]);
+  return { ok: true, data: { id, slug } };
+}
+
+export async function adminUpdateCategory(
+  id: string,
+  patch: Partial<Pick<CatalogCategory, "name" | "description" | "accent" | "featured"> & { longDescription?: string | null }>
+): Promise<AdminResult<{ id: string }>> {
+  const db = await getDb();
+  const row = await db.get<{ id: string }>(`SELECT id FROM categories WHERE id = ?`, [id]);
+  if (!row) return failure("not_found", "No category found.");
+
+  const sets: string[] = [`updated_at = ?`];
+  const params: unknown[] = [new Date().toISOString()];
+  const setColumn = (column: string, value: unknown) => {
+    sets.push(`${column} = ?`);
+    params.push(value);
+  };
+  if (patch.name !== undefined) setColumn("name", patch.name);
+  if (patch.description !== undefined) setColumn("description", patch.description);
+  if (patch.longDescription !== undefined) setColumn("long_description", patch.longDescription);
+  if (patch.accent !== undefined) setColumn("accent", patch.accent);
+  if (patch.featured !== undefined) setColumn("featured", patch.featured ? 1 : 0);
+
+  await db.run(`UPDATE categories SET ${sets.join(", ")} WHERE id = ?`, [...params, row.id]);
+  return { ok: true, data: { id: row.id } };
+}
+
+export async function adminDeleteCategory(id: string): Promise<AdminResult<{ id: string }>> {
+  const db = await getDb();
+  const row = await db.get<{ id: string; name: string }>(`SELECT id, name FROM categories WHERE id = ?`, [id]);
+  if (!row) return failure("not_found", "No category found.");
+
+  const refs = await db.get<{ c: number }>(`SELECT COUNT(*) AS c FROM products WHERE category_id = ?`, [row.id]);
+  if ((refs?.c ?? 0) > 0) {
+    return failure("conflict", `${refs?.c} product${(refs?.c ?? 0) === 1 ? "" : "s"} still sit in this category — move them first.`);
+  }
+
+  try {
+    await db.run(`DELETE FROM categories WHERE id = ?`, [row.id]);
+  } catch (error) {
+    if (isForeignKeyError(error)) {
+      return failure("conflict", "Products still reference this category — move them first.");
+    }
+    throw error;
+  }
+  return { ok: true, data: { id: row.id } };
 }

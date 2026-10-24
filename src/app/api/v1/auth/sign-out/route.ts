@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api/guard";
 import { revokeSession } from "@/server/session";
-import { clearSessionCookie } from "@/server/api/http";
+import { clearSessionCookie, clearCartCookie, readCartToken } from "@/server/api/http";
 import { logAudit } from "@/server/audit";
 
-export const POST = withApi({}, async ({ identity, meta }) => {
+export const POST = withApi({}, async ({ request, identity, meta }) => {
   if (identity) {
     await revokeSession(identity.sessionId);
     await logAudit({
@@ -20,5 +20,10 @@ export const POST = withApi({}, async ({ identity, meta }) => {
   }
   const response = NextResponse.json({ data: { ok: true } });
   clearSessionCookie(response);
+  // Also drop the cart cookie: it may still resolve to a user-tagged cart
+  // from the session that just ended (see getActiveCart ownership guard).
+  if (await readCartToken(request)) {
+    clearCartCookie(response);
+  }
   return response;
 });

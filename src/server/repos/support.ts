@@ -65,7 +65,7 @@ export async function listTickets(query: TicketQuery = {}): Promise<SupportTicke
     created_at: string;
   }>(
     `SELECT ticket_id, id, author_type, author_label, body, created_at FROM ticket_messages
-     WHERE author_type != 'agent' OR 1=1 ORDER BY created_at`
+     ORDER BY created_at`
   );
   const allNotes = await db.all<{ ticket_id: string; id: string; author_label: string; body: string; created_at: string }>(
     `SELECT n.ticket_id, n.id, u.display_name AS author_label, n.body, n.created_at
@@ -194,13 +194,14 @@ export async function createTicket(input: CreateTicketInput): Promise<string> {
   const db = await getDb();
   const id = newId("tkt");
   const now = new Date().toISOString();
-  const seqRow = await db.get<{ value: number }>(`SELECT value FROM counters WHERE name = 'ticket_ref'`);
-  await db.run(
+  // Atomic counter read-increment-write in one statement — two concurrent
+  // creates can never read the same value (duplicates violate the UNIQUE
+  // reference and 500 the contact form).
+  const seqRow = await db.get<{ value: number }>(
     `INSERT INTO counters (name, value) VALUES ('ticket_ref', 1)
-     ON CONFLICT(name) DO UPDATE SET value = value + 1`
+     ON CONFLICT(name) DO UPDATE SET value = value + 1 RETURNING value`
   );
-  const next = await db.get<{ value: number }>(`SELECT value FROM counters WHERE name = 'ticket_ref'`);
-  const reference = `TKT-${new Date().getFullYear()}-${String(next?.value ?? seqRow?.value ?? 1).padStart(4, "0")}`;
+  const reference = `TKT-${new Date().getFullYear()}-${String(seqRow?.value ?? 1).padStart(4, "0")}`;
 
   await db.run(
     `INSERT INTO tickets

@@ -3,11 +3,22 @@
  * audit queries, staff.
  */
 
-import { getDb } from "@/server/db/client";
+import { getDb, type BatchStatement } from "@/server/db/client";
+import { newId } from "@/server/ids";
+import { hashPassword } from "@/server/password";
+import { logAudit } from "@/server/audit";
 import { catalogCounts } from "@/server/repos/catalog";
 import { mediaStats } from "@/server/repos/media";
 import { listOrdersForUser } from "@/server/repos/orders";
-import type { AdminCustomer, AdminRole, AuditEvent, AuditSeverity, OrderSummary, SupportTicket } from "@/types";
+import type {
+  AdminCustomer,
+  AdminRole,
+  AdminStaffMember,
+  AuditEvent,
+  AuditSeverity,
+  OrderSummary,
+  SupportTicket,
+} from "@/types";
 
 export interface AdminOverviewData {
   mediaAssets: number;
@@ -44,7 +55,12 @@ export async function adminOverview(): Promise<AdminOverviewData> {
   };
 }
 
-function mapAudit(row: Record<string, unknown>): AuditEvent {
+function mapAudit(row: Record<string, unknown>): AuditEvent & {
+  actorType: string;
+  actorLabel: string;
+  targetType: string;
+  targetId: string;
+} {
   return {
     id: row.id as string,
     at: row.at as string,
@@ -54,6 +70,12 @@ function mapAudit(row: Record<string, unknown>): AuditEvent {
     severity: row.severity as AuditSeverity,
     detail: row.detail as string,
     ip: (row.ip as string) ?? undefined,
+    // Extra passthrough fields for the CSV export (additive — consumers of
+    // AuditEvent keep working).
+    actorType: row.actor_type as string,
+    actorLabel: row.actor_label as string,
+    targetType: row.target_type as string,
+    targetId: row.target_id as string,
   };
 }
 
@@ -206,17 +228,11 @@ interface PaginatedLike<T> {
 
 /* ---------------------------------- staff --------------------------------- */
 
-export interface StaffMember {
-  id: string;
-  name: string;
-  email: string;
-  status: string;
-  roles: string[];
-  lastLoginAt: string | null;
-  createdAt: string;
-}
-
-export async function listStaff(): Promise<StaffMember[]> {
+/**
+ * Live staff roster mapped onto the AdminStaffMember contract — role slugs and
+ * display names resolved through the user_roles / roles joins.
+ */
+export async function listStaff(): Promise<AdminStaffMember[]> {
   const db = await getDb();
   const rows = await db.all<{
     id: string;
@@ -225,10 +241,13 @@ export async function listStaff(): Promise<StaffMember[]> {
     status: string;
     last_login_at: string | null;
     created_at: string;
+    role_slugs: string | null;
     role_names: string | null;
   }>(
     `SELECT u.id, u.display_name, u.email, u.status, u.last_login_at, u.created_at,
-            (SELECT GROUP_CONCAT(r.name, ', ') FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+            (SELECT GROUP_CONCAT(r.slug, ',') FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+             WHERE ur.user_id = u.id) AS role_slugs,
+            (SELECT GROUP_CONCAT(r.name, ',') FROM user_roles ur JOIN roles r ON r.id = ur.role_id
              WHERE ur.user_id = u.id) AS role_names
      FROM users u
      WHERE EXISTS (SELECT 1 FROM user_roles ur2 WHERE ur2.user_id = u.id)
@@ -236,13 +255,130 @@ export async function listStaff(): Promise<StaffMember[]> {
   );
   return rows.map((row) => ({
     id: row.id,
-    name: row.display_name,
     email: row.email,
+    displayName: row.display_name,
+    roleSlugs: row.role_slugs ? row.role_slugs.split(",") : [],
+    roleNames: row.role_names ? row.role_names.split(",") : [],
     status: row.status,
-    roles: row.role_names ? row.role_names.split(", ") : [],
     lastLoginAt: row.last_login_at,
     createdAt: row.created_at,
   }));
+}
+
+/* ------------------------------ user creation ----------------------------- */
+
+const TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+
+/** Generate a strong, human-typeable temporary password (≥ 14 chars, 3 classes). */
+function generateTempPassword(): string {
+  const pick = (chars: string): string => {
+    const buf = new Uint8Array(1);
+    crypto.getRandomValues(buf);
+    return chars[buf[0] % chars.length];
+  };
+  // Guarantee one of each class, then fill from the full alphabet.
+  const chars: string[] = [
+    pick("ABCDEFGHJKMNPQRSTUVWXYZ"),
+    pick("abcdefghjkmnpqrstuvwxyz"),
+    pick("23456789"),
+  ];
+  for (let i = 0; i < 11; i += 1) chars.push(pick(TEMP_PASSWORD_ALPHABET));
+  // Fisher-Yates shuffle so the guaranteed characters are not front-loaded.
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const buf = new Uint8Array(1);
+    crypto.getRandomValues(buf);
+    const j = buf[0] % (i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join("");
+}
+
+export type AdminCreateUserResult =
+  | { ok: true; id: string; email: string; tempPassword?: string }
+  | { ok: false; reason: "email_taken" | "role_not_found" };
+
+/**
+ * Create a staff or customer account. Staff accounts get the role resolved by
+ * slug; customer accounts get no role. When no password is supplied a strong
+ * temporary one is generated and returned ONCE for the admin to hand over.
+ */
+export async function adminCreateUser(input: {
+  email: string;
+  displayName: string;
+  password?: string;
+  roleSlug?: string;
+  kind: "staff" | "customer";
+  actor: { id?: string | null; label: string };
+}): Promise<AdminCreateUserResult> {
+  const db = await getDb();
+  const email = input.email.trim().toLowerCase();
+  const existing = await db.get<{ id: string }>(`SELECT id FROM users WHERE email = ?`, [email]);
+  if (existing) return { ok: false, reason: "email_taken" };
+
+  // Resolve the role BEFORE the write batch so an invalid slug fails cleanly.
+  let roleId: string | null = null;
+  if (input.kind === "staff") {
+    const role = await db.get<{ id: string }>(`SELECT id FROM roles WHERE slug = ?`, [
+      input.roleSlug ?? "",
+    ]);
+    if (!role) return { ok: false, reason: "role_not_found" };
+    roleId = role.id;
+  }
+
+  const now = new Date().toISOString();
+  const userId = newId("usr");
+  const tempPassword = input.password ? undefined : generateTempPassword();
+  const passwordHash = await hashPassword(tempPassword ?? input.password!);
+
+  const statements: BatchStatement[] = [
+    {
+      sql: `INSERT INTO users
+              (id, email, password_hash, display_name, phone, date_of_birth, status, locale,
+               marketing_opt_in, created_at, updated_at)
+            VALUES (?, ?, ?, ?, NULL, NULL, 'active', 'en-AE', 0, ?, ?)`,
+      params: [userId, email, passwordHash, input.displayName.trim(), now, now],
+    },
+    {
+      sql: `INSERT INTO auth_identities (id, user_id, provider, provider_user_id, created_at)
+            VALUES (?, ?, 'password', ?, ?)`,
+      params: [newId("aut"), userId, email, now],
+    },
+    {
+      sql: `INSERT INTO user_preferences (user_id, updated_at) VALUES (?, ?)`,
+      params: [userId, now],
+    },
+  ];
+  if (roleId) {
+    statements.push({
+      sql: `INSERT INTO user_roles (user_id, role_id, assigned_at) VALUES (?, ?, ?)`,
+      params: [userId, roleId, now],
+    });
+  }
+
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    // Two concurrent creates can both pass the check-then-insert window;
+    // UNIQUE(email) is the arbiter — surface it as a clean conflict.
+    const clash = await db.get<{ id: string }>(`SELECT id FROM users WHERE email = ?`, [email]);
+    if (clash) return { ok: false, reason: "email_taken" };
+    throw error;
+  }
+
+  await logAudit({
+    // actorType "admin": the audit_events CHECK constraint allows
+    // ('admin','system','customer') only — a "staff" value would be rejected.
+    actorType: "admin",
+    actorId: input.actor.id ?? null,
+    actorLabel: input.actor.label,
+    action: input.kind === "staff" ? "staff.create" : "customer.create",
+    targetType: "user",
+    targetId: email,
+    detail: `${input.kind === "staff" ? "Staff" : "Customer"} account created for ${input.displayName.trim()} (${email})${tempPassword ? " with a generated temporary password" : ""}`,
+    after: { kind: input.kind, roleSlug: input.roleSlug ?? null },
+  });
+
+  return { ok: true, id: userId, email, tempPassword };
 }
 
 /** Customer detail bundle with REAL attribution: own orders + own tickets. */

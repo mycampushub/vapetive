@@ -1,16 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
 import { adminService } from "@/services/admin";
 import type { OrderStatus, OrderSummary } from "@/types";
-import { DataTable, FilterBar, type Column } from "@/components/shared/admin-primitives";
+import { DataTable, FilterBar, Pagination, SearchField, type Column } from "@/components/shared/admin-primitives";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { PrototypeNotice } from "@/components/shared/prototype-notice";
 import { formatDateTime } from "@/lib/format";
-import Link from "next/link";
 
 type OrderRow = OrderSummary & { id: string };
 
@@ -24,6 +24,9 @@ const STATUS_OPTIONS: Array<{ value: OrderStatus | "all"; label: string }> = [
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ];
+
+const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 300;
 
 function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
@@ -39,44 +42,72 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 export function OrdersView() {
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [total, setTotal] = useState(0);
   const [status, setStatus] = useState<OrderStatus | "all">("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [refreshing, setRefreshing] = useState(true);
   const [attempt, setAttempt] = useState(0);
+
+  // Debounced search — the query hits the server, so throttle keystrokes.
+  // Only bump `refreshing` when the committed value actually changes, so a
+  // type-then-revert within the window cannot dim the table forever.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = searchInput.trim();
+      setSearch((prev) => { if (prev !== next) setRefreshing(true); return next; });
+      setPage((prev) => { if (prev !== 1) setRefreshing(true); return 1; });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     let alive = true;
     adminService
-      .orders()
-      .then((list) => {
+      .orders({ status: status === "all" ? undefined : status, search: search || undefined, page, pageSize: PAGE_SIZE })
+      .then((result) => {
         if (alive) {
-          setOrders(list.map((o) => ({ ...o, id: o.reference })));
+          setOrders(result.items.map((o) => ({ ...o, id: o.reference })));
+          setTotal(result.total);
           setState("ready");
         }
       })
       .catch(() => {
         if (alive) setState("error");
+      })
+      .finally(() => {
+        if (alive) setRefreshing(false);
       });
     return () => {
       alive = false;
     };
-  }, [attempt]);
+  }, [status, search, page, attempt]);
 
   const retry = useCallback(() => {
     setState("loading");
+    setRefreshing(true);
     setAttempt((a) => a + 1);
   }, []);
 
-  const filtered = useMemo(
-    () => (status === "all" ? orders : orders.filter((o) => o.status === status)),
-    [orders, status]
-  );
+  const onStatus = useCallback((next: OrderStatus | "all") => {
+    setStatus(next);
+    setPage(1);
+    setRefreshing(true);
+  }, []);
+
+  const gotoPage = useCallback((next: number) => {
+    setPage(next);
+    setRefreshing(true);
+  }, []);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const columns = useMemo<Column<OrderRow>[]>(
     () => [
       {
         key: "reference",
         header: "Reference",
-        sortable: true,
-        sortValue: (o) => o.reference,
         cell: (o) => (
           <Link
             href={`/admin/orders/${o.reference}`}
@@ -89,8 +120,6 @@ export function OrdersView() {
       {
         key: "placedAt",
         header: "Placed",
-        sortable: true,
-        sortValue: (o) => o.placedAt,
         cell: (o) => <span className="text-muted-foreground">{formatDateTime(o.placedAt)}</span>,
       },
       {
@@ -105,9 +134,8 @@ export function OrdersView() {
           </div>
         ),
       },
-      { key: "status", header: "Status", sortable: true, sortValue: (o) => o.status, cell: (o) => <OrderStatusBadge status={o.status} /> },
-      // Total sorts numerically on the parsed AED amount, not lexicographically on the label.
-      { key: "totalLabel", header: "Total", sortable: true, sortValue: (o) => Number(o.totalLabel.replace(/[^0-9.]/g, "")), cell: (o) => <span className="font-medium text-foreground">{o.totalLabel}</span> },
+      { key: "status", header: "Status", cell: (o) => <OrderStatusBadge status={o.status} /> },
+      { key: "totalLabel", header: "Total", cell: (o) => <span className="font-medium text-foreground">{o.totalLabel}</span> },
     ],
     []
   );
@@ -141,13 +169,30 @@ export function OrdersView() {
         <p className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-violet-soft">People</p>
         <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Orders</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Orders placed on the storefront — references, items, status and totals. Status transitions are audited.
+          Orders placed on the storefront — references, items, status and totals. Search by reference, email or
+          customer name; status transitions are audited.
         </p>
       </header>
 
-      <PrototypeNotice>Live order records — new orders arrive at checkout and appear here in real time.</PrototypeNotice>
+      <PrototypeNotice>Live order records — search, filters and pagination are served by the orders API.</PrototypeNotice>
 
-      <FilterBar options={STATUS_OPTIONS} value={status} onChange={setStatus} ariaLabel="Filter orders by status" />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <SearchField
+          value={searchInput}
+          onChange={setSearchInput}
+          label="Search orders by reference, email or customer name"
+          placeholder="Search reference, email or name…"
+          className="w-full lg:w-80"
+        />
+        {state === "ready" && (
+          <p className="text-[0.78rem] text-muted-foreground" aria-live="polite">
+            {total} order{total === 1 ? "" : "s"}
+            {search || status !== "all" ? " matched" : ""}
+          </p>
+        )}
+      </div>
+
+      <FilterBar options={STATUS_OPTIONS} value={status} onChange={onStatus} ariaLabel="Filter orders by status" />
 
       {state === "loading" && <TableSkeleton />}
       {state === "error" && (
@@ -157,21 +202,30 @@ export function OrdersView() {
           onRetry={retry}
         />
       )}
-      {state === "ready" && filtered.length === 0 && (
+      {state === "ready" && orders.length === 0 && (
         <EmptyState
           icon={ShoppingBag}
           title="No orders match"
-          body="No orders match the selected status. Choose All to see every order."
+          body="No orders match the current search or status filter. Choose All or clear the search to see every order."
         />
       )}
-      {state === "ready" && filtered.length > 0 && (
-        <DataTable
-          columns={columns}
-          rows={filtered}
-          initialSort={{ key: "placedAt", dir: "desc" }}
-          caption="Order records with reference, placement date, items, status and total"
-          mobileCard={mobileCard}
-        />
+      {state === "ready" && orders.length > 0 && (
+        <>
+          <div className={refreshing ? "pointer-events-none opacity-60 transition-opacity" : "transition-opacity"}>
+            <DataTable
+              columns={columns}
+              rows={orders}
+              caption="Order records with reference, placement date, items, status and total"
+              mobileCard={mobileCard}
+            />
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <Pagination page={page} pageCount={pageCount} onChange={gotoPage} ariaLabel="Order pages" />
+            <p className="text-[0.72rem] text-muted-foreground">
+              Page {Math.min(page, pageCount)} of {pageCount} · {total} total
+            </p>
+          </div>
+        </>
       )}
     </div>
   );

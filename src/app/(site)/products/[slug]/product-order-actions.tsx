@@ -7,15 +7,14 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { cartService } from "@/services/cart";
 import { VariantPicker, initialVariantSelection, primaryVariantId, type VariantSelection } from "./variant-picker";
-import { MobileSummary } from "./mobile-summary";
 import type { CatalogItem } from "@/types";
 import { formatAED, cn } from "@/lib/utils";
 
 /**
  * ProductOrderActions — the ordering island for the product page.
  * Owns the variant selection (passed down to the controlled
- * VariantPicker) and the Add to cart / Buy now actions, plus the fixed
- * mobile order bar. Uses the in-memory cart store; blocked products or
+ * VariantPicker) and the Add to cart / Buy now actions.
+ * Uses the in-memory cart store; blocked products or
  * variants disable ordering with an explanatory label.
  */
 export function ProductOrderActions({ item }: { item: CatalogItem }) {
@@ -84,14 +83,6 @@ export function ProductOrderActions({ item }: { item: CatalogItem }) {
           Free standard delivery at AED 200 or more · 18+ ID-verified delivery · Cash &amp; card on delivery
         </p>
       </div>
-
-      <MobileSummary
-        name={item.name}
-        availability={item.availability}
-        price={item.price}
-        onAdd={addToCart}
-        canAdd={canOrder}
-      />
     </>
   );
 }

@@ -36,7 +36,12 @@ export function fail(
   extra?: { fields?: Record<string, string>; requestId?: string; headers?: Record<string, string> }
 ): NextResponse {
   const body: ApiErrorBody = {
-    error: { code, message, ...(extra?.fields ? { fields: extra.fields } : {}) },
+    error: {
+      code,
+      message,
+      ...(extra?.fields ? { fields: extra.fields } : {}),
+      ...(extra?.requestId ? { requestId: extra.requestId } : {}),
+    },
   };
   return NextResponse.json(body, {
     status,

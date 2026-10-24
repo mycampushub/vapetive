@@ -32,8 +32,15 @@ export async function enqueue(type: JobType, payload: unknown): Promise<string> 
     `INSERT INTO job_queue (id, type, payload_json, status, created_at) VALUES (?, ?, ?, 'pending', ?)`,
     [id, type, JSON.stringify(payload), new Date().toISOString()]
   );
-  // Fire-and-forget local drain; the Queue consumer is the trigger on Workers.
-  void drainJobs().catch((error) => console.error("[jobs] drain failed:", error));
+  // Fire-and-forget local drain; on Workers the response end would cancel
+  // pending work, so hand the drain to the request context when available
+  // (waitUntil keeps it alive up to 30s after the response).
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    getCloudflareContext().ctx.waitUntil(drainJobs().catch((error) => console.error("[jobs] drain failed:", error)));
+  } catch {
+    void drainJobs().catch((error) => console.error("[jobs] drain failed:", error));
+  }
   return id;
 }
 
@@ -97,10 +104,13 @@ export async function drainJobs(): Promise<void> {
       `SELECT id, type, payload_json FROM job_queue WHERE status = 'pending' ORDER BY created_at ASC LIMIT 20`
     );
     for (const job of jobs) {
-      await db.run(`UPDATE job_queue SET status = 'processing', leased_at = ? WHERE id = ?`, [
-        new Date().toISOString(),
-        job.id,
-      ]);
+      // CAS claim: two isolates draining concurrently must not both process
+      // the same job (duplicate emails / double Resend spend).
+      const claimed = await db.run(
+        `UPDATE job_queue SET status = 'processing', leased_at = ? WHERE id = ? AND status = 'pending'`,
+        [new Date().toISOString(), job.id]
+      );
+      if (claimed.changes !== 1) continue;
       try {
         await runJob(job.type as JobType, job.payload_json);
         await db.run(`UPDATE job_queue SET status = 'done', processed_at = ? WHERE id = ?`, [

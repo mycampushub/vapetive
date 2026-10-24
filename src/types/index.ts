@@ -149,6 +149,138 @@ export interface CatalogItem {
   relatedSlugs?: string[];
 }
 
+/* ------------------------ Admin catalog (console) ----------------------- */
+/* Contracts shared between /api/v1/admin/* and the admin console UI. */
+
+export interface AdminProductImage {
+  /** Existing DB row id, or null for images not yet persisted. */
+  id: string | null;
+  mediaAssetId: string;
+  url: string;
+  alt: string | null;
+}
+
+export interface AdminProductVariant {
+  id: string;
+  label: string;
+  type: ItemVariant["type"];
+  swatch: string | null;
+  available: boolean;
+  priceDeltaCents: number;
+}
+
+export interface AdminProductSpecEntry {
+  id: string | null;
+  label: string;
+  value: string;
+}
+
+export interface AdminProductSpecGroup {
+  id: string | null;
+  title: string;
+  entries: AdminProductSpecEntry[];
+}
+
+export interface AdminProductDocument {
+  id: string | null;
+  title: string;
+  type: "pdf" | "web";
+  href: string | null;
+  note: string | null;
+}
+
+export interface AdminProductSummary {
+  id: string;
+  slug: string;
+  name: string;
+  sku: string;
+  brandId: string;
+  brandName: string;
+  categoryId: string;
+  categoryName: string;
+  priceCents: number;
+  compareAtCents: number | null;
+  /** published_at IS NOT NULL */
+  published: boolean;
+  publishedAt: string | null;
+  featured: boolean;
+  isNew: boolean;
+  availability: Availability;
+  /** Product-level on-hand qty from the inventory table (variant_id = ''). */
+  qtyOnHand: number;
+  version: number;
+  updatedAt: string;
+}
+
+export interface AdminProductDetail extends AdminProductSummary {
+  model: string | null;
+  tagline: string;
+  description: string;
+  nicotineStrength: string | null;
+  origin: string | null;
+  ageRestricted: boolean;
+  keywords: string | null;
+  lowStockThreshold: number;
+  warnings: string[];
+  conformity: ConformityInfo[];
+  images: AdminProductImage[];
+  variants: AdminProductVariant[];
+  specGroups: AdminProductSpecGroup[];
+  documents: AdminProductDocument[];
+}
+
+export interface AdminProductListResult {
+  items: AdminProductSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * Full editor patch — replace-all semantics for child collections
+ * (images / specGroups / documents), UPDATE-only for variants (carts
+ * reference variant ids), column writes for the rest.
+ */
+export interface AdminProductPatch {
+  name?: string;
+  model?: string | null;
+  tagline?: string;
+  description?: string;
+  priceCents?: number;
+  compareAtCents?: number | null;
+  featured?: boolean;
+  isNew?: boolean;
+  nicotineStrength?: string | null;
+  origin?: string | null;
+  keywords?: string | null;
+  lowStockThreshold?: number;
+  warnings?: string[];
+  conformity?: ConformityInfo[];
+  images?: AdminProductImage[];
+  specGroups?: AdminProductSpecGroup[];
+  documents?: AdminProductDocument[];
+  variantUpdates?: Array<{ id: string; label?: string; available?: boolean; priceDeltaCents?: number }>;
+  restockQty?: number;
+  setOutOfStock?: boolean;
+  clearOutOfStock?: boolean;
+  publish?: boolean;
+  categoryId?: string;
+  brandId?: string;
+  /** Optimistic concurrency — 409 when the server version differs. */
+  expectedVersion?: number;
+}
+
+export interface AdminStaffMember {
+  id: string;
+  email: string;
+  displayName: string;
+  roleSlugs: string[];
+  roleNames: string[];
+  status: string;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
 /* ----------------------------- Media ------------------------------ */
 
 export interface MediaAsset {
@@ -294,6 +426,18 @@ export interface OrderDetail {
   deliveryLabel: string;
   paymentLabel: string;
   totalLabel: string;
+  /** Admin-facing customer identity (undefined on customer-facing copies). */
+  customer?: { name: string; email: string; isGuest: boolean };
+  /** Admin-facing shipping address (undefined on customer-facing copies). */
+  shippingAddress?: {
+    fullName: string;
+    phone: string;
+    emirate: string;
+    city: string;
+    street: string;
+    building?: string | null;
+    apartment?: string | null;
+  };
 }
 
 /* ----------------------------- Support ---------------------------- */

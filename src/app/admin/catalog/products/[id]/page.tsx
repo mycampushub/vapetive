@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { FileQuestion } from "lucide-react";
-import { getProductByIdOrSlug } from "@/server/repos/catalog";
+import { getCurrentIdentity } from "@/server/auth-context";
+import { hasPermission } from "@/server/rbac";
+import { adminGetProduct } from "@/server/repos/catalog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ProductEditorView } from "./product-editor-view";
 
 export const metadata: Metadata = { title: "Edit product" };
 
 export default async function AdminEditProductPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const item = await getProductByIdOrSlug(id);
+  // Per-page permission gate (QA audit): product records require catalog.read.
+  const identity = await getCurrentIdentity();
+  if (!identity || !hasPermission(identity.roles, "catalog.read")) redirect("/admin");
 
-  if (!item) {
+  const { id } = await params;
+  const detail = await adminGetProduct(id);
+
+  if (!detail) {
     return (
       <div className="mx-auto max-w-7xl">
         <EmptyState
@@ -24,5 +31,5 @@ export default async function AdminEditProductPage({ params }: { params: Promise
     );
   }
 
-  return <ProductEditorView item={item} />;
+  return <ProductEditorView detail={detail} />;
 }

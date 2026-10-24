@@ -43,7 +43,14 @@ export async function readCartToken(request: Request): Promise<string | null> {
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${CART_COOKIE}=`));
   if (!match) return null;
-  const raw = decodeURIComponent(match.slice(CART_COOKIE.length + 1));
+  // Malformed percent-encoding in a client cookie must degrade to "no cart",
+  // not 500 the request.
+  let raw: string;
+  try {
+    raw = decodeURIComponent(match.slice(CART_COOKIE.length + 1));
+  } catch {
+    return null;
+  }
   return verifySignedValue(raw);
 }
 
@@ -55,6 +62,11 @@ export async function readSessionToken(request: Request): Promise<string | null>
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${SESSION_COOKIE}=`));
   if (!match) return null;
-  const raw = decodeURIComponent(match.slice(SESSION_COOKIE.length + 1));
+  let raw: string;
+  try {
+    raw = decodeURIComponent(match.slice(SESSION_COOKIE.length + 1));
+  } catch {
+    return null;
+  }
   return verifySignedValue(raw);
 }

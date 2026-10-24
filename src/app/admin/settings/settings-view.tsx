@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BadgeCheck,
   CloudCog,
@@ -10,10 +10,10 @@ import {
   MessageCircle,
   Save,
   ShieldAlert,
+  TriangleAlert,
 } from "lucide-react";
 import type { SiteSettings } from "@/types";
 import { FormSection } from "@/components/shared/admin-primitives";
-import { ErrorState } from "@/components/shared/error-state";
 import { PrototypeNotice } from "@/components/shared/prototype-notice";
 import { FormField, Select, TextArea, TextInput } from "@/components/forms/fields";
 import { Button } from "@/components/ui/button";
@@ -21,14 +21,15 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 
-function SkeletonBlock() {
-  return (
-    <div className="space-y-4" aria-hidden="true">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="skeleton-sheen h-40 rounded-2xl border border-line bg-white/[0.02]" />
-      ))}
-    </div>
-  );
+interface DeliveryFees {
+  freeThreshold: number;
+  standardFee: number;
+  expressFee: number;
+}
+
+interface FeatureFlags {
+  maintenance: boolean;
+  checkoutEnabled: boolean;
 }
 
 interface Integration {
@@ -49,13 +50,67 @@ const INTEGRATIONS: Integration[] = [
   { id: "whatsapp", name: "WhatsApp commerce", detail: "Conversational ordering via wa.me deep links — live on cart, checkout and order confirmations.", status: "verified" as const, statusLabel: "Live", icon: MessageCircle },
 ];
 
+/** Coerce a free-text AED amount into a safe non-negative number. */
+function aedAmount(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.round(parsed * 100) / 100;
+}
+
+/** Fee inputs keep raw text so a blank field can mean “keep the stored value”. */
+interface FeeDrafts {
+  freeThreshold: string;
+  standardFee: string;
+  expressFee: string;
+}
+
+/** Structural subset of SiteSettings the editor binds to. */
+interface SiteFieldSource {
+  brandName: string;
+  brandLegalName: string;
+  tagline: string;
+  description: string;
+  locale: string;
+  currency: string;
+  contact: { email: string; supportEmail: string; phone: string; addressLines: string[]; hours: string };
+  seo: { titleTemplate: string; defaultDescription: string };
+}
+
+/**
+ * Flatten every editable field into one comparable snapshot — the dirtiness
+ * baseline for the hydration effect (order must stay stable).
+ */
+function snapshot(site: SiteFieldSource, fees: FeeDrafts, features: FeatureFlags): Array<string | boolean> {
+  return [
+    site.brandName,
+    site.brandLegalName,
+    site.tagline,
+    site.description,
+    site.locale,
+    site.currency,
+    site.contact.email,
+    site.contact.supportEmail,
+    site.contact.phone,
+    site.contact.addressLines.join("\n"),
+    site.contact.hours,
+    site.seo.titleTemplate,
+    site.seo.defaultDescription,
+    fees.freeThreshold,
+    fees.standardFee,
+    fees.expressFee,
+    features.maintenance,
+    features.checkoutEnabled,
+  ];
+}
+
 export function SettingsView({ settings }: { settings: SiteSettings }) {
   const { toast } = useToast();
-  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
 
+  // Site identity — seeded from the server render, reconciled with the API.
   const [brandName, setBrandName] = useState(settings.brandName);
   const [legalName, setLegalName] = useState(settings.brandLegalName);
   const [tagline, setTagline] = useState(settings.tagline);
+  const [description, setDescription] = useState(settings.description);
   const [locale, setLocale] = useState(settings.locale);
   const [currency, setCurrency] = useState(settings.currency);
   const [email, setEmail] = useState(settings.contact.email);
@@ -66,43 +121,125 @@ export function SettingsView({ settings }: { settings: SiteSettings }) {
   const [titleTemplate, setTitleTemplate] = useState(settings.seo.titleTemplate);
   const [defaultDescription, setDefaultDescription] = useState(settings.seo.defaultDescription);
 
-  const [flags, setFlags] = useState({
-    catalog: true,
-    purchasing: false,
-    reviews: false,
-    wishlist: true,
+  // Delivery & pricing (AED) + feature flags — hydrated from the settings API.
+  const [fees, setFees] = useState<FeeDrafts>({ freeThreshold: "200", standardFee: "25", expressFee: "35" });
+  const [features, setFeatures] = useState<FeatureFlags>({ maintenance: false, checkoutEnabled: true });
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [saving, setSaving] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  // Latest-values ref + dirtiness baseline: a slow GET (or a manual retry)
+  // must never clobber in-flight edits, so hydration is skipped while dirty.
+  const valuesRef = useRef<Array<string | boolean>>(
+    snapshot(settings, { freeThreshold: "200", standardFee: "25", expressFee: "35" }, { maintenance: false, checkoutEnabled: true })
+  );
+  const baselineRef = useRef<Array<string | boolean>>(valuesRef.current);
+
+  useEffect(() => {
+    valuesRef.current = snapshot(
+      {
+        brandName,
+        brandLegalName: legalName,
+        tagline,
+        description,
+        locale,
+        currency,
+        contact: { email, supportEmail, phone, addressLines: address.split("\n"), hours },
+        seo: { titleTemplate, defaultDescription },
+      },
+      fees,
+      features
+    );
   });
 
   useEffect(() => {
-    const timer = setTimeout(() => setState("ready"), 260);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const [saving, setSaving] = useState(false);
+    // Form is dirty — the user is editing; do not overwrite with server state.
+    const base = baselineRef.current;
+    if (valuesRef.current.some((value, i) => value !== base[i])) return;
+    let alive = true;
+    setLoadError(null);
+    fetch("/api/v1/admin/settings", { headers: { accept: "application/json" } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Request failed (${response.status})`);
+        const body = (await response.json()) as {
+          data: { site: SiteSettings; delivery: DeliveryFees; features: FeatureFlags };
+        };
+        if (!alive) return;
+        const feeDrafts: FeeDrafts = {
+          freeThreshold: String(body.data.delivery.freeThreshold),
+          standardFee: String(body.data.delivery.standardFee),
+          expressFee: String(body.data.delivery.expressFee),
+        };
+        setFees(feeDrafts);
+        setFeatures(body.data.features);
+        // Reconcile: the KV document is the source of truth for site fields too.
+        const site = body.data.site;
+        setBrandName(site.brandName);
+        setLegalName(site.brandLegalName);
+        setTagline(site.tagline);
+        setDescription(site.description);
+        setLocale(site.locale);
+        setCurrency(site.currency);
+        setEmail(site.contact.email);
+        setSupportEmail(site.contact.supportEmail);
+        setPhone(site.contact.phone);
+        setAddress(site.contact.addressLines.join("\n"));
+        setHours(site.contact.hours);
+        setTitleTemplate(site.seo.titleTemplate);
+        setDefaultDescription(site.seo.defaultDescription);
+        // The hydrated values become the new dirtiness baseline.
+        baselineRef.current = snapshot(site, feeDrafts, body.data.features);
+      })
+      .catch(() => {
+        if (alive) setLoadError("Could not load the live configuration — showing the server-rendered values with default delivery fees and flags.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [attempt]);
 
   const onSave = async () => {
     setSaving(true);
     try {
+      // Blank fee fields mean “keep the stored value” — skip them in the PATCH
+      // (the server falls back to the existing config) instead of writing 0.
+      const delivery: Partial<DeliveryFees> = {};
+      if (fees.freeThreshold.trim() !== "") delivery.freeThreshold = aedAmount(fees.freeThreshold);
+      if (fees.standardFee.trim() !== "") delivery.standardFee = aedAmount(fees.standardFee);
+      if (fees.expressFee.trim() !== "") delivery.expressFee = aedAmount(fees.expressFee);
       const response = await fetch("/api/v1/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           site: {
+            name: brandName,
             tagline,
+            description,
             contact: { email, supportEmail, phone, hours },
           },
+          legal: { name: legalName },
+          locale,
+          currency,
+          address,
+          seo: { titleTemplate, defaultDescription },
+          features,
+          ...(Object.keys(delivery).length > 0 ? { delivery } : {}),
         }),
       });
+      const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
       if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
         throw new Error(body.error?.message ?? "Save failed");
       }
+      // Saved state is the new baseline — nothing in-flight to protect.
+      baselineRef.current = valuesRef.current.slice();
       toast({
         title: "Settings saved",
-        description: "Site settings are live — stored with full revision history.",
+        description: "Every panel is live — site config, delivery fees and feature flags are stored with revision history.",
       });
     } catch (error) {
       toast({
+        variant: "destructive",
         title: "Save failed",
         description: error instanceof Error ? error.message : "Please try again.",
       });
@@ -111,51 +248,40 @@ export function SettingsView({ settings }: { settings: SiteSettings }) {
     }
   };
 
-  if (state === "loading") {
-    return (
-      <div className="mx-auto w-full max-w-5xl space-y-6">
-        <header className="space-y-2">
-          <div className="skeleton-sheen h-4 w-20 rounded bg-white/[0.05]" />
-          <div className="skeleton-sheen h-8 w-40 rounded bg-white/[0.05]" />
-        </header>
-        <SkeletonBlock />
-      </div>
-    );
-  }
-
-  if (state === "error") {
-    return (
-      <div className="mx-auto w-full max-w-5xl">
-        <ErrorState
-          title="Settings unavailable"
-          body="The settings service could not be reached. Try again to reload the configuration."
-          onRetry={() => {
-            setState("loading");
-            setTimeout(() => setState("ready"), 260);
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <header className="space-y-2">
         <p className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-violet-soft">System</p>
         <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Settings</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Site-wide configuration. Tagline and public contact details save to the versioned configuration store;
-          the remaining panels are display-only for now.
+          Site-wide configuration. Saving writes every panel — site identity, contact, SEO, delivery pricing and
+          feature flags — to the versioned configuration store in one request.
         </p>
       </header>
 
       <PrototypeNotice>
-        Saving writes the tagline and public contact details to the configuration store via PATCH — every save is
-        captured in revision history.
+        One Save writes the full edited set via PATCH — site config and delivery fees carry revision history; feature
+        flags apply to the storefront immediately.
       </PrototypeNotice>
 
+      {loadError && (
+        <div className="flex items-start gap-3 rounded-2xl border border-warning/30 bg-warning/[0.06] px-4 py-3.5">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
+          <div className="flex-1">
+            <p className="text-[0.84rem] text-foreground">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => setAttempt((a) => a + 1)}
+              className="mt-1 text-[0.78rem] font-medium text-violet-soft underline-offset-4 hover:underline"
+            >
+              Retry loading the live configuration
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Brand identity */}
-      <FormSection title="Brand identity" description="Names and tagline used across the public site.">
+      <FormSection title="Brand identity" description="Names, tagline and storefront description used across the public site.">
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField label="Brand name" htmlFor="settings-brand">
             <TextInput id="settings-brand" value={brandName} onChange={(e) => setBrandName(e.target.value)} />
@@ -166,19 +292,22 @@ export function SettingsView({ settings }: { settings: SiteSettings }) {
           <FormField label="Tagline" htmlFor="settings-tagline" className="sm:col-span-2">
             <TextInput id="settings-tagline" value={tagline} onChange={(e) => setTagline(e.target.value)} />
           </FormField>
+          <FormField label="Storefront description" htmlFor="settings-description" className="sm:col-span-2" hint="Used in metadata and the homepage intro.">
+            <TextArea id="settings-description" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+          </FormField>
         </div>
       </FormSection>
 
       {/* Locale & currency */}
       <FormSection title="Locale & currency" description="Defaults for the public storefront.">
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Locale" htmlFor="settings-locale" hint="Display-only for now — locale is not part of the saved configuration.">
+          <FormField label="Locale" htmlFor="settings-locale">
             <Select id="settings-locale" value={locale} onChange={(e) => setLocale(e.target.value)}>
               <option value="en-AE">English (UAE) — en-AE</option>
               <option value="ar-AE">العربية (الإمارات) — ar-AE</option>
             </Select>
           </FormField>
-          <FormField label="Currency" htmlFor="settings-currency" hint="Display-only for now — currency is not part of the saved configuration.">
+          <FormField label="Currency" htmlFor="settings-currency">
             <Select id="settings-currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
               <option value="AED">AED — UAE dirham</option>
               <option value="USD">USD — US dollar</option>
@@ -221,59 +350,86 @@ export function SettingsView({ settings }: { settings: SiteSettings }) {
         </div>
       </FormSection>
 
+      {/* Delivery & pricing */}
+      <FormSection
+        title="Delivery & pricing"
+        description="Fees in AED — applied at checkout. Orders at or above the free-delivery threshold ship free."
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          <FormField
+            label="Free-delivery threshold (AED)"
+            htmlFor="delivery-threshold"
+            hint="Leave blank to keep the stored value."
+          >
+            <TextInput
+              id="delivery-threshold"
+              type="number"
+              min={0}
+              step={1}
+              inputMode="decimal"
+              value={fees.freeThreshold}
+              onChange={(e) => setFees((f) => ({ ...f, freeThreshold: e.target.value }))}
+            />
+          </FormField>
+          <FormField label="Standard fee (AED)" htmlFor="delivery-standard" hint="Leave blank to keep the stored value.">
+            <TextInput
+              id="delivery-standard"
+              type="number"
+              min={0}
+              step={1}
+              inputMode="decimal"
+              value={fees.standardFee}
+              onChange={(e) => setFees((f) => ({ ...f, standardFee: e.target.value }))}
+            />
+          </FormField>
+          <FormField label="Express fee (AED)" htmlFor="delivery-express" hint="Leave blank to keep the stored value.">
+            <TextInput
+              id="delivery-express"
+              type="number"
+              min={0}
+              step={1}
+              inputMode="decimal"
+              value={fees.expressFee}
+              onChange={(e) => setFees((f) => ({ ...f, expressFee: e.target.value }))}
+            />
+          </FormField>
+        </div>
+        <p className="mt-3 text-[0.75rem] text-muted-foreground">
+          Stored in fils (1 AED = 100 fils) — checkout quotes live from these values.
+        </p>
+      </FormSection>
+
       {/* Feature flags */}
-      <FormSection title="Feature flags" description="Module switches for the storefront. Toggles apply to this session only — flag writes are not saved yet.">
+      <FormSection title="Feature flags" description="Storefront switches — saved with the next Save and enforced by the API.">
         <div className="space-y-5">
-          {[
-            {
-              key: "catalog" as const,
-              label: "Catalog browsing",
-              description: "Product and category pages are publicly visible.",
-              disabled: false,
-              hint: undefined as string | undefined,
-            },
-            {
-              key: "purchasing" as const,
-              label: "Purchasing",
-              description: "Cart, checkout and payment flows.",
-              disabled: true,
-              hint: "Pending compliance review",
-            },
-            {
-              key: "reviews" as const,
-              label: "Product reviews",
-              description: "Customer ratings and review submission.",
-              disabled: true,
-              hint: "Pending compliance review",
-            },
-            {
-              key: "wishlist" as const,
-              label: "Saved items",
-              description: "Visitors can save products to a personal list.",
-              disabled: false,
-              hint: undefined as string | undefined,
-            },
-          ].map((flag) => (
-            <div key={flag.key} className="flex items-start justify-between gap-4 rounded-xl border border-line bg-white/[0.02] px-4 py-3.5">
-              <div>
-                <p className="text-[0.88rem] font-medium text-foreground">{flag.label}</p>
-                <p className="mt-0.5 text-[0.78rem] text-muted-foreground">{flag.description}</p>
-                {flag.hint && <p className="mt-1 text-[0.74rem] font-medium text-warning">{flag.hint}</p>}
-              </div>
-              <Switch
-                checked={flags[flag.key]}
-                disabled={flag.disabled}
-                onCheckedChange={(checked) => {
-                  setFlags((f) => ({ ...f, [flag.key]: checked }));
-                  toast({
-                    title: "Flag toggled for this session",
-                    description: `"${flag.label}" is now ${checked ? "on" : "off"} in this view — flag writes are not saved yet.`,
-                  });
-                }}
-                aria-label={flag.label}
-              />
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-line bg-white/[0.02] px-4 py-3.5">
+            <div>
+              <p className="text-[0.88rem] font-medium text-foreground">Maintenance mode</p>
+              <p className="mt-0.5 text-[0.78rem] text-muted-foreground">
+                Replaces the public site with the maintenance page for non-staff visitors. The admin console stays
+                reachable for staff sessions.
+              </p>
             </div>
-          ))}
+            <Switch
+              checked={features.maintenance}
+              onCheckedChange={(checked) => setFeatures((f) => ({ ...f, maintenance: checked }))}
+              aria-label="Maintenance mode"
+            />
+          </div>
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-line bg-white/[0.02] px-4 py-3.5">
+            <div>
+              <p className="text-[0.88rem] font-medium text-foreground">Checkout enabled</p>
+              <p className="mt-0.5 text-[0.78rem] text-muted-foreground">
+                When disabled, order placement returns 503 and the storefront shows checkout as paused. Browsing,
+                carts and saved items keep working.
+              </p>
+            </div>
+            <Switch
+              checked={features.checkoutEnabled}
+              onCheckedChange={(checked) => setFeatures((f) => ({ ...f, checkoutEnabled: checked }))}
+              aria-label="Checkout enabled"
+            />
+          </div>
         </div>
       </FormSection>
 
@@ -335,12 +491,13 @@ export function SettingsView({ settings }: { settings: SiteSettings }) {
 
       {/* Save */}
       <div className="flex flex-wrap items-center gap-4">
-        <Button onClick={onSave}>
+        <Button onClick={() => void onSave()} disabled={saving}>
           <Save className="size-4" aria-hidden="true" />
-          Save settings
+          {saving ? "Saving…" : "Save settings"}
         </Button>
         <p className="text-[0.78rem] text-muted-foreground">
-          Saving writes to the versioned configuration store — every save is captured in revision history.
+          Saving writes the full edited set to the versioned configuration store — every save is captured in revision
+          history.
         </p>
       </div>
     </div>

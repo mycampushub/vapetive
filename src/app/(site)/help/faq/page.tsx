@@ -5,8 +5,6 @@ import { canonical, faqJsonLd, JsonLd } from "@/lib/seo";
 import { FaqView } from "./faq-view";
 import { getFaqs } from "@/server/data";
 
-export const revalidate = 3600; // ISR: DB-driven content re-renders hourly even if baked from a stale build DB
-
 export const metadata: Metadata = {
   title: "Vape FAQ UAE — Delivery, Brands, Ordering & Safety",
   description:

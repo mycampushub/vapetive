@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Tags } from "lucide-react";
+import { Plus, Tags, Trash2 } from "lucide-react";
+import { adminService } from "@/services/admin";
 import { catalogService } from "@/services/catalog";
 import { DataTable, FormSection, type Column } from "@/components/shared/admin-primitives";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
-import { PrototypeNotice } from "@/components/shared/prototype-notice";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { FormField, Select, TextInput } from "@/components/forms/fields";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
@@ -49,8 +59,11 @@ export function CategoriesView() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const [newName, setNewName] = useState("");
-  const [newSlug, setNewSlug] = useState("");
+  const [newDescription, setNewDescription] = useState("");
   const [newAccent, setNewAccent] = useState<CatalogCategory["accent"]>("violet");
+  const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CatalogCategory | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -83,26 +96,91 @@ export function CategoriesView() {
   const patchRow = (id: string, p: Partial<CatalogCategory>) =>
     setCategories((prev) => (prev ? prev.map((c) => (c.id === id ? { ...c, ...p } : c)) : prev));
 
-  const addCategory = () => {
-    const name = newName.trim();
-    const slug = newSlug.trim();
-    if (!name || !slug) {
-      toast({ variant: "destructive", title: "Name and slug are required", description: "Fill both fields before adding the category." });
-      return;
+  /** Optimistic toggle — reverts and toasts when the API rejects it. */
+  const onToggleFeatured = async (row: CatalogCategory, next: boolean) => {
+    patchRow(row.id, { featured: next });
+    try {
+      await adminService.updateCategory(row.id, { featured: next });
+    } catch (error) {
+      patchRow(row.id, { featured: row.featured });
+      toast({
+        variant: "destructive",
+        title: "Could not update the category",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     }
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-      toast({ variant: "destructive", title: "Invalid slug", description: "Use lowercase letters, numbers and hyphens only." });
-      return;
-    }
-    setCategories((prev) => [
-      ...(prev ?? []),
-      { id: `cat-new-${Date.now()}`, slug, name, description: "Added in this view — not saved to the catalog yet.", itemCount: 0, featured: false, accent: newAccent },
-    ]);
-    setNewName("");
-    setNewSlug("");
-    setNewAccent("violet");
-    toast({ title: "Not saved yet", description: `${name} was added to this view only — category writes are not wired into the console yet.` });
   };
+
+  const onChangeAccent = async (row: CatalogCategory, accent: CatalogCategory["accent"]) => {
+    const previous = row.accent;
+    patchRow(row.id, { accent });
+    try {
+      await adminService.updateCategory(row.id, { accent });
+    } catch (error) {
+      patchRow(row.id, { accent: previous });
+      toast({
+        variant: "destructive",
+        title: "Could not update the category",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    }
+  };
+
+  const addCategory = async () => {
+    const name = newName.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    try {
+      const created = await adminService.createCategory({
+        name,
+        ...(newDescription.trim() ? { description: newDescription.trim() } : {}),
+        accent: newAccent,
+      });
+      toast({ title: "Category created", description: `${name} is live at /collections/${created.slug}.` });
+      setNewName("");
+      setNewDescription("");
+      setNewAccent("violet");
+      setReloadKey((k) => k + 1);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not create the category",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      await adminService.deleteCategory(deleteTarget.id);
+      toast({ title: "Category deleted", description: `${deleteTarget.name} was removed from the taxonomy.` });
+      setDeleteTarget(null);
+      setReloadKey((k) => k + 1);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const deleteButton = (row: CatalogCategory) => (
+    <button
+      type="button"
+      onClick={() => setDeleteTarget(row)}
+      aria-label={`Delete ${row.name}`}
+      className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
+    >
+      <Trash2 className="size-4" aria-hidden="true" />
+    </button>
+  );
 
   const columns: Column<CatalogCategory>[] = [
     {
@@ -110,7 +188,12 @@ export function CategoriesView() {
       header: "Name",
       sortable: true,
       sortValue: (row) => row.name,
-      cell: (row) => <span className="font-medium text-foreground">{row.name}</span>,
+      cell: (row) => (
+        <span className="block">
+          <span className="font-medium text-foreground">{row.name}</span>
+          <span className="mt-0.5 block max-w-xs truncate text-[0.76rem] text-muted-foreground">{row.description}</span>
+        </span>
+      ),
     },
     {
       key: "slug",
@@ -132,7 +215,7 @@ export function CategoriesView() {
       header: "Featured",
       cell: (row) => (
         <span className="inline-flex items-center gap-2">
-          <Switch checked={Boolean(row.featured)} onCheckedChange={(v) => patchRow(row.id, { featured: v })} aria-label={`Feature ${row.name}`} />
+          <Switch checked={Boolean(row.featured)} onCheckedChange={(v) => void onToggleFeatured(row, v)} aria-label={`Feature ${row.name}`} />
           <span className="text-[0.76rem] text-muted-foreground">{row.featured ? "Featured" : "Standard"}</span>
         </span>
       ),
@@ -146,7 +229,7 @@ export function CategoriesView() {
           <Select
             aria-label={`Accent for ${row.name}`}
             value={row.accent}
-            onChange={(e) => patchRow(row.id, { accent: e.target.value as CatalogCategory["accent"] })}
+            onChange={(e) => void onChangeAccent(row, e.target.value as CatalogCategory["accent"])}
             className="h-9 w-32 text-[0.82rem]"
           >
             {ACCENT_OPTIONS.map((opt) => (
@@ -158,27 +241,31 @@ export function CategoriesView() {
         </span>
       ),
     },
+    {
+      key: "actions",
+      header: "",
+      className: "w-16 text-right",
+      cell: (row) => <span className="inline-flex items-center justify-end">{deleteButton(row)}</span>,
+    },
   ];
 
-  const hasNew = Boolean(newName.trim() || newSlug.trim());
+  const hasNew = Boolean(newName.trim());
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <header>
         <h1 className="font-display text-h2 font-bold tracking-tight text-foreground">Categories</h1>
         <p className="mt-1.5 max-w-2xl text-[0.92rem] text-muted-foreground">
-          Category taxonomy — names, slugs, product counts, featured flags and accent colors.
+          Category taxonomy — names, slugs, product counts, featured flags and accent colors. Changes save immediately.
         </p>
       </header>
-
-      <PrototypeNotice>The category list reads live from the catalog database. Creating categories and toggling featured or accent from this console are not saved yet.</PrototypeNotice>
 
       {error ? (
         <ErrorState body={error} onRetry={retry} />
       ) : loading && !categories ? (
         <TableSkeleton />
       ) : categories && categories.length === 0 ? (
-        <EmptyState icon={Tags} title="No categories" body="No categories in the catalog yet." />
+        <EmptyState icon={Tags} title="No categories" body="No categories in the catalog yet — add one below." />
       ) : categories ? (
         <DataTable
           columns={columns}
@@ -195,11 +282,11 @@ export function CategoriesView() {
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-3">
                 <span className="text-[0.8rem] text-muted-foreground">{row.itemCount} products</span>
                 <span className="inline-flex items-center gap-2">
-                  <Switch checked={Boolean(row.featured)} onCheckedChange={(v) => patchRow(row.id, { featured: v })} aria-label={`Feature ${row.name}`} />
+                  <Switch checked={Boolean(row.featured)} onCheckedChange={(v) => void onToggleFeatured(row, v)} aria-label={`Feature ${row.name}`} />
                   <Select
                     aria-label={`Accent for ${row.name}`}
                     value={row.accent}
-                    onChange={(e) => patchRow(row.id, { accent: e.target.value as CatalogCategory["accent"] })}
+                    onChange={(e) => void onChangeAccent(row, e.target.value as CatalogCategory["accent"])}
                     className="h-9 w-28 text-[0.8rem]"
                   >
                     {ACCENT_OPTIONS.map((opt) => (
@@ -208,6 +295,7 @@ export function CategoriesView() {
                       </option>
                     ))}
                   </Select>
+                  {deleteButton(row)}
                 </span>
               </div>
             </div>
@@ -216,13 +304,13 @@ export function CategoriesView() {
         />
       ) : null}
 
-      <FormSection title="Add category" description="Adds a row to this view — category writes are not wired into the console yet.">
+      <FormSection title="Add category" description="Creates a real category with an auto-generated, unique slug.">
         <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10.5rem_auto]">
-          <FormField label="Name" htmlFor="new-cat-name">
-            <TextInput id="new-cat-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Batteries" className="h-10" />
+          <FormField label="Name" htmlFor="new-cat-name" required>
+            <TextInput id="new-cat-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Batteries" maxLength={80} className="h-10" />
           </FormField>
-          <FormField label="Slug" htmlFor="new-cat-slug" hint="Lowercase letters, numbers, hyphens.">
-            <TextInput id="new-cat-slug" value={newSlug} onChange={(e) => setNewSlug(e.target.value)} placeholder="batteries" className="h-10 font-mono text-[0.84rem]" />
+          <FormField label="Description" htmlFor="new-cat-description">
+            <TextInput id="new-cat-description" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Shown on the collection tile" maxLength={300} className="h-10" />
           </FormField>
           <FormField label="Accent" htmlFor="new-cat-accent">
             <Select id="new-cat-accent" value={newAccent} onChange={(e) => setNewAccent(e.target.value as CatalogCategory["accent"])} className="h-10">
@@ -235,17 +323,47 @@ export function CategoriesView() {
           </FormField>
           <button
             type="button"
-            onClick={addCategory}
+            onClick={() => void addCategory()}
+            disabled={!hasNew || creating}
             className={cn(
-              "inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-medium transition-all",
+              "inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-medium transition-all disabled:opacity-50",
               hasNew ? "bg-primary text-primary-foreground hover:brightness-110" : "border border-line text-muted-foreground hover:text-foreground"
             )}
           >
             <Plus className="size-4" aria-hidden="true" />
-            Add category
+            {creating ? "Adding…" : "Add category"}
           </button>
         </div>
       </FormSection>
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{deleteTarget?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Categories with products still inside cannot be deleted — move those products to another category first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmDelete();
+              }}
+              className="bg-error text-white hover:bg-error/90"
+            >
+              {deleting ? "Deleting…" : "Delete category"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -165,7 +165,7 @@ export function OverviewView() {
                   {user.displayName}
                 </h3>
                 <p className="mt-0.5 truncate text-[0.82rem] text-muted-foreground">{user.email}</p>
-                <p className="mt-0.5 text-[0.78rem] text-muted-foreground">Member since {user.joinedAt}</p>
+                <p className="mt-0.5 text-[0.78rem] text-muted-foreground">Member since {formatDate(user.joinedAt)}</p>
               </div>
             </div>
           </div>

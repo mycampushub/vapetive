@@ -79,7 +79,9 @@ export async function createCart(userId?: string | null): Promise<CartRow> {
 export async function getActiveCart(token: string | null, userId: string | null): Promise<CartRow | null> {
   if (token) {
     const byToken = await findCartByToken(token);
-    if (byToken) return byToken;
+    // Never resolve a token cart that belongs to a DIFFERENT user (stale
+    // cookie after sign-out would otherwise leak another account's cart).
+    if (byToken && (!byToken.user_id || byToken.user_id === userId)) return byToken;
   }
   if (userId) {
     return findActiveCartForUser(userId);
@@ -88,7 +90,13 @@ export async function getActiveCart(token: string | null, userId: string | null)
 }
 
 export async function touchCart(cartId: string): Promise<void> {
-  await (await getDb()).run(`UPDATE carts SET updated_at = ? WHERE id = ?`, [new Date().toISOString(), cartId]);
+  const now = new Date().toISOString();
+  // Sliding expiry: an actively-used cart must not be swept at its original
+  // 30-day created_at deadline.
+  await (await getDb()).run(
+    `UPDATE carts SET updated_at = ?, expires_at = ? WHERE id = ?`,
+    [now, new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(), cartId]
+  );
 }
 
 /* --------------------------------- lines ---------------------------------- */
@@ -251,6 +259,9 @@ export async function mergeGuestCart(guestToken: string, userId: string): Promis
   const db = await getDb();
   const guest = await findCartByToken(guestToken);
   if (!guest) return;
+  // Ownership guard: a cart row that already belongs to another account
+  // (stale cookie from a previous sign-in) must never be absorbed.
+  if (guest.user_id && guest.user_id !== userId) return;
 
   const userCart = await findActiveCartForUser(userId);
   if (userCart && userCart.id === guest.id) return; // already attached
@@ -275,9 +286,4 @@ export async function mergeGuestCart(guestToken: string, userId: string): Promis
     { sql: `DELETE FROM cart_items WHERE cart_id = ?`, params: [guest.id] },
     { sql: `UPDATE carts SET user_id = ? WHERE id = ?`, params: [userId, target.id] },
   ]);
-}
-
-/** Attach a cart to a user (used on sign-in when the cart belongs to nobody). */
-export async function attachCartToUser(cartId: string, userId: string): Promise<void> {
-  await (await getDb()).run(`UPDATE carts SET user_id = ? WHERE id = ?`, [userId, cartId]);
 }

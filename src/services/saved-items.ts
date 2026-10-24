@@ -69,6 +69,18 @@ export async function hydrateSavedItemsFromServer(signedIn: boolean): Promise<vo
     useSavedItems.getState().setHydrated();
     return;
   }
+  // Push locally-saved (guest) ids up BEFORE the server list replaces local
+  // state — otherwise anything bookmarked while signed out is destroyed.
+  const localIds = useSavedItems.getState().items.map((i) => i.itemId);
+  await Promise.all(
+    localIds.map((itemId) =>
+      fetch("/api/v1/account/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: itemId }),
+      }).catch(() => undefined)
+    )
+  );
   try {
     const response = await fetch("/api/v1/account/saved", { headers: { accept: "application/json" } });
     if (response.ok) {

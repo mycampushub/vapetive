@@ -26,10 +26,10 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
   const item = await getProductBySlug(slug);
-  // notFound() here — not a robots'd metadata stub — because generateMetadata
-  // resolves before the response head flushes. A loading.tsx Suspense boundary
-  // wraps the page body, so a notFound() raised only in the streamed body
-  // cannot change the status code and would ship a 200 soft-404.
+  // notFound() is raised here in generateMetadata (and again in the page body)
+  // so unknown slugs return a real 404 status code. No loading.tsx Suspense
+  // boundary exists on this route by design — raising notFound() only in a
+  // streamed body would ship a 200 soft-404.
   if (!item) notFound();
   return {
     title: `${item.name} \u2014 ${item.tagline}`,
@@ -104,8 +104,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   ];
 
   return (
-    // Extra bottom padding keeps the fixed MobileSummary from obscuring content on small screens.
-    <div className="pb-28 md:pb-0">
+    <div>
       <JsonLd data={structuredData} />
       <PageContainer>
         <div className="pt-6">

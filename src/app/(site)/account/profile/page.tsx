@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilePage() {
-  await requireAccountSession();
+  await requireAccountSession("/account/profile");
   return (
     <AccountPage
       title="Profile"

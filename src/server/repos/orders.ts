@@ -613,7 +613,19 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     statements.push({ sql: `UPDATE carts SET status = 'converted', updated_at = ? WHERE id = ?`, params: [now, input.cartId] });
     statements.push({ sql: `DELETE FROM cart_items WHERE cart_id = ?`, params: [input.cartId] });
 
-    await db.batch(statements);
+    try {
+      await db.batch(statements);
+    } catch (error) {
+      // Concurrent duplicate submit: the partial unique index on
+      // orders(idempotency_key) (migration 0003) rejects the second insert —
+      // serve the stored replay instead of failing the customer.
+      const msg = error instanceof Error ? error.message : String(error);
+      if (input.idempotencyKey && /UNIQUE/i.test(msg)) {
+        const replayed = await replayIdempotent(input.idempotencyKey, requestHash);
+        if (replayed) return { ok: true, summary: replayed, reference: replayed.reference };
+      }
+      throw error;
+    }
   } catch (error) {
     // Release reservations — the batch failed, so nothing was written.
     for (const r of reservations) {
@@ -773,7 +785,15 @@ export async function getOrderDetailRow(reference: string): Promise<{
     image_url: string | null;
   }>;
   events: Array<{ type: string; to_status: string | null; message: string | null; at: string }>;
-  address: { emirate: string; city: string; street: string } | null;
+  address: {
+    full_name: string;
+    phone: string;
+    emirate: string;
+    city: string;
+    street: string;
+    building: string | null;
+    apartment: string | null;
+  } | null;
 } | null> {
   const db = await getDb();
   const order = await db.get<OrderRow & { customer_note: string | null }>(
@@ -796,8 +816,17 @@ export async function getOrderDetailRow(reference: string): Promise<{
       `SELECT type, to_status, message, at FROM order_events WHERE order_id = ? ORDER BY at`,
       [order.id]
     ),
-    db.get<{ emirate: string; city: string; street: string }>(
-      `SELECT emirate, city, street FROM order_addresses WHERE order_id = ? AND type = 'shipping'`,
+    db.get<{
+      full_name: string;
+      phone: string;
+      emirate: string;
+      city: string;
+      street: string;
+      building: string | null;
+      apartment: string | null;
+    }>(
+      `SELECT full_name, phone, emirate, city, street, building, apartment
+       FROM order_addresses WHERE order_id = ? AND type = 'shipping'`,
       [order.id]
     ),
   ]);
@@ -834,6 +863,24 @@ export function mapOrderDetail(
     deliveryLabel: `Courier to ${addressEcho} — ID verification on delivery`,
     paymentLabel: paymentLabel(order.payment_method),
     totalLabel: formatAED(filsToAED(order.total_cents)),
+    // Customer identity + shipping address — consumed by the admin console;
+    // on customer-facing copies these echo the customer's own order data.
+    customer: {
+      name: order.full_name,
+      email: order.email,
+      isGuest: order.user_id === null,
+    },
+    shippingAddress: address
+      ? {
+          fullName: address.full_name,
+          phone: address.phone,
+          emirate: address.emirate,
+          city: address.city,
+          street: address.street,
+          building: address.building,
+          apartment: address.apartment,
+        }
+      : undefined,
   };
 }
 
@@ -1061,7 +1108,21 @@ export async function transitionOrder(
     }
   }
 
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    // The status CAS (db.run) already committed — if the event/inventory
+    // batch fails, roll the status back so the hop can be retried instead of
+    // leaving an order "delivered"/"cancelled" with no event and unsettled
+    // stock.
+    await db.run(
+      `UPDATE orders SET status = ?, updated_at = ?, version = version - 1,
+         delivered_at = NULL, cancelled_at = NULL
+       WHERE id = ? AND status = ? AND version = ?`,
+      [order.status, now, order.id, toStatus, order.version + 1]
+    ).catch(() => undefined);
+    throw error;
+  }
 
   await logAudit({
     actorType: "admin",
@@ -1080,27 +1141,6 @@ export async function transitionOrder(
 }
 
 /** Admin order counts by status for dashboards. */
-export async function adminOrderStats(): Promise<{
-  total: number;
-  open: number;
-  revenueFils: number;
-}> {
-  const db = await getDb();
-  const [totals] = await Promise.all([
-    db.get<{ c: number }>(`SELECT COUNT(*) AS c FROM orders`),
-  ]);
-  const [open] = await Promise.all([
-    db.get<{ c: number }>(
-      `SELECT COUNT(*) AS c FROM orders WHERE status IN ('placed','confirmed','processing','packed')`
-    ),
-  ]);
-  const [revenue] = await Promise.all([
-    db.get<{ s: number }>(
-      `SELECT COALESCE(SUM(total_cents), 0) AS s FROM orders WHERE status NOT IN ('cancelled')`
-    ),
-  ]);
-  return { total: totals?.c ?? 0, open: open?.c ?? 0, revenueFils: revenue?.s ?? 0 };
-}
 
 /** Admin order detail bundle: summary + full detail for the console pages. */
 export async function adminOrderDetailBundle(

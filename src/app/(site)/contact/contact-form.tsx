@@ -18,6 +18,21 @@ import { useToast } from "@/hooks/use-toast";
 
 const SUBJECTS = ["Order question", "Product question", "Safety report", "Privacy request", "Feedback", "Other"] as const;
 
+/**
+ * Support-ticket category derived from the chosen subject — keeps tickets
+ * landing in the right queue server-side instead of defaulting to "General".
+ * Keys must match the SUBJECTS option strings exactly; anything unmapped
+ * falls back to "other".
+ */
+const CATEGORY_MAP: Record<string, "order" | "product" | "delivery" | "account" | "other"> = {
+  "Order question": "order",
+  "Product question": "product",
+  "Safety report": "other",
+  "Privacy request": "account",
+  "Feedback": "other",
+  "Other": "other",
+};
+
 const enquirySchema = z.object({
   name: z.string().trim().min(2, "Enter your name (at least 2 characters)."),
   email: z.string().trim().pipe(z.email("Enter a valid email address.")),
@@ -71,6 +86,7 @@ export function ContactForm() {
           email: values.email,
           subject: values.subject,
           message: values.message,
+          category: CATEGORY_MAP[values.subject] ?? "other",
         }),
       });
       const body = (await response.json().catch(() => ({}))) as {

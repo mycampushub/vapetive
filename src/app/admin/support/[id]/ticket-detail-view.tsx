@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Lock, Send } from "lucide-react";
@@ -67,6 +67,15 @@ export function TicketDetailView({ ticket }: { ticket: SupportTicket }) {
   const [reply, setReply] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const internalNotes = ticket.internalNotes ?? [];
+
+  // The server may auto-move status (open → pending) after a reply; keep the
+  // local controls in sync when a router.refresh() delivers updated props.
+  // (Mandated by the QA audit fix — the props-change sync is intentional.)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStatus(ticket.status);
+    setPriority(ticket.priority);
+  }, [ticket.status, ticket.priority]);
 
   const onSendReply = useCallback(() => {
     if (!reply.trim() || pending) return;

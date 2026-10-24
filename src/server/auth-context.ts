@@ -32,9 +32,6 @@ export async function getCurrentIdentity(): Promise<RequestIdentity | null> {
   return { user: found.user, roles, sessionId: found.session.id };
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
-  return (await getCurrentIdentity())?.user ?? null;
-}
 
 /** Request metadata for sessions/audit (route handlers only). */
 export async function requestMeta(): Promise<{ ip: string | null; userAgent: string | null }> {

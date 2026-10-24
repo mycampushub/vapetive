@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Minus, Plus, ShoppingBag, Trash2, Truck } from "lucide-react";
 import { PageHeading } from "@/components/layout/page-heading";
@@ -9,7 +10,13 @@ import { PrototypeNotice } from "@/components/shared/prototype-notice";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { OrderItemImage } from "@/components/account/order-item-image";
 import { useToast } from "@/hooks/use-toast";
-import { FREE_DELIVERY_THRESHOLD, cartService, useCart } from "@/services/cart";
+import { cartService, deliveryFeeFor, useCart } from "@/services/cart";
+import {
+  DEFAULT_DELIVERY_CONFIG,
+  fetchCheckoutConfig,
+  toDeliveryFeeOverride,
+  type CheckoutDeliveryConfig,
+} from "@/services/checkout";
 import { WhatsAppOrderButton } from "@/components/shared/whatsapp-order-button";
 import { composeCartMessage, openWhatsApp } from "@/services/whatsapp";
 import { formatAED, cn } from "@/lib/utils";
@@ -22,10 +29,24 @@ export function CartView() {
   const hydrated = useCart((s) => s.hydrated);
   const { toast } = useToast();
 
+  // Admin-editable delivery fees — fall back to the built-in constants.
+  const [deliveryConfig, setDeliveryConfig] = useState<CheckoutDeliveryConfig>(DEFAULT_DELIVERY_CONFIG);
+  useEffect(() => {
+    let cancelled = false;
+    fetchCheckoutConfig().then((next) => {
+      if (!cancelled) setDeliveryConfig(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const cart = cartService.getCartDetail(lines);
   const { totals, hasBlocked } = cart;
   const purchasableCount = totals.itemCount;
-  const remainingForFree = Math.max(0, FREE_DELIVERY_THRESHOLD - totals.subtotal);
+  const standardFee = deliveryFeeFor(totals.subtotal, "standard", toDeliveryFeeOverride(deliveryConfig));
+  const cartTotal = totals.subtotal + standardFee;
+  const remainingForFree = Math.max(0, deliveryConfig.freeThreshold - totals.subtotal);
 
   const onRemove = (key: string, name: string, variantLabel?: string) => {
     cartService.removeLine(key);
@@ -207,20 +228,20 @@ export function CartView() {
               <dd className="font-medium text-foreground">{formatAED(totals.subtotal)}</dd>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted-foreground">Standard delivery</dt>
+              <dt className="text-muted-foreground">{deliveryConfig.methods.standard.label}</dt>
               <dd className="font-medium text-foreground">
-                {totals.deliveryFee === 0 ? "Free" : formatAED(totals.deliveryFee)}
+                {standardFee === 0 ? "Free" : formatAED(standardFee)}
               </dd>
             </div>
             <p className="flex items-start gap-2 text-[0.75rem] leading-relaxed text-muted-foreground">
               <Truck className="mt-0.5 size-3.5 shrink-0 text-ice" aria-hidden="true" />
               {remainingForFree > 0
-                ? `Add ${formatAED(remainingForFree)} more for free standard delivery at ${formatAED(FREE_DELIVERY_THRESHOLD)} or more.`
+                ? `Add ${formatAED(remainingForFree)} more for free standard delivery at ${formatAED(deliveryConfig.freeThreshold)} or more.`
                 : "Standard delivery is free on this order."}
             </p>
             <div className="flex items-baseline justify-between gap-4 border-t border-line pt-4">
               <dt className="text-muted-foreground">Total</dt>
-              <dd className="font-display text-xl font-bold text-foreground">{formatAED(totals.total)}</dd>
+              <dd className="font-display text-xl font-bold text-foreground">{formatAED(cartTotal)}</dd>
             </div>
           </dl>
 

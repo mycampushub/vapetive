@@ -2,12 +2,22 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BadgeCheck, ExternalLink, Plus } from "lucide-react";
+import { BadgeCheck, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { adminService } from "@/services/admin";
 import { brandsService } from "@/services/brands";
 import { DataTable, FormSection, type Column } from "@/components/shared/admin-primitives";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
-import { PrototypeNotice } from "@/components/shared/prototype-notice";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { FormField, Select, TextInput } from "@/components/forms/fields";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +25,8 @@ import { cn } from "@/lib/utils";
 import type { Brand } from "@/types";
 
 /* ------------------------------ helpers --------------------------- */
+
+type BrandRow = Brand & { productCount: number };
 
 const ACCENT_DOT: Record<Brand["accent"], string> = {
   violet: "bg-violet-glow",
@@ -44,24 +56,25 @@ function TableSkeleton() {
 /* ------------------------------- view ----------------------------- */
 
 export function BrandsView() {
-  const [brands, setBrands] = useState<Brand[] | null>(null);
-  const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const [brands, setBrands] = useState<BrandRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   const [newName, setNewName] = useState("");
-  const [newSlug, setNewSlug] = useState("");
+  const [newTagline, setNewTagline] = useState("");
   const [newAccent, setNewAccent] = useState<Brand["accent"]>("violet");
+  const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<BrandRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     let alive = true;
     Promise.all([brandsService.brands(), brandsService.itemCounts()])
-      .then(([b, c]) => {
+      .then(([b, counts]) => {
         if (alive) {
-          setBrands(b.map((row) => ({ ...row })));
-          setCounts(c);
+          setBrands(b.map((row) => ({ ...row, productCount: counts[row.slug] ?? 0 })));
           setError(null);
         }
       })
@@ -82,43 +95,96 @@ export function BrandsView() {
     setReloadKey((k) => k + 1);
   };
 
-  const patchRow = (id: string, p: Partial<Brand>) =>
+  const patchRow = (id: string, p: Partial<BrandRow>) =>
     setBrands((prev) => (prev ? prev.map((b) => (b.id === id ? { ...b, ...p } : b)) : prev));
 
-  const addBrand = () => {
-    const name = newName.trim();
-    const slug = newSlug.trim();
-    if (!name || !slug) {
-      toast({ variant: "destructive", title: "Name and slug are required", description: "Fill both fields before adding the brand." });
-      return;
+  /** Optimistic toggle — reverts and toasts when the API rejects it. */
+  const onToggleFeatured = async (row: BrandRow, next: boolean) => {
+    patchRow(row.id, { featured: next });
+    try {
+      await adminService.updateBrand(row.id, { featured: next });
+    } catch (error) {
+      patchRow(row.id, { featured: row.featured });
+      toast({
+        variant: "destructive",
+        title: "Could not update the brand",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     }
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-      toast({ variant: "destructive", title: "Invalid slug", description: "Use lowercase letters, numbers and hyphens only." });
-      return;
-    }
-    setBrands((prev) => [
-      ...(prev ?? []),
-      {
-        id: `brand-new-${Date.now()}`,
-        slug,
-        name,
-        tagline: "Added in this view — not saved yet.",
-        blurb: "Brand added from the console.",
-        description: "Added in this view — not saved to the brand directory yet.",
-        origin: "—",
-        established: "—",
-        featured: false,
-        accent: newAccent,
-      },
-    ]);
-    setCounts((prev) => ({ ...(prev ?? {}), [slug]: 0 }));
-    setNewName("");
-    setNewSlug("");
-    setNewAccent("violet");
-    toast({ title: "Not saved yet", description: `${name} was added to this view only — brand writes are not wired into the console yet.` });
   };
 
-  const columns: Column<Brand>[] = [
+  const onChangeAccent = async (row: BrandRow, accent: Brand["accent"]) => {
+    const previous = row.accent;
+    patchRow(row.id, { accent });
+    try {
+      await adminService.updateBrand(row.id, { accent });
+    } catch (error) {
+      patchRow(row.id, { accent: previous });
+      toast({
+        variant: "destructive",
+        title: "Could not update the brand",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    }
+  };
+
+  const addBrand = async () => {
+    const name = newName.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    try {
+      const created = await adminService.createBrand({
+        name,
+        ...(newTagline.trim() ? { tagline: newTagline.trim() } : {}),
+        accent: newAccent,
+      });
+      toast({ title: "Brand created", description: `${name} is live at /brand/${created.slug}.` });
+      setNewName("");
+      setNewTagline("");
+      setNewAccent("violet");
+      setReloadKey((k) => k + 1);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not create the brand",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      await adminService.deleteBrand(deleteTarget.id);
+      toast({ title: "Brand deleted", description: `${deleteTarget.name} was removed from the directory.` });
+      setDeleteTarget(null);
+      setReloadKey((k) => k + 1);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const deleteButton = (row: BrandRow) => (
+    <button
+      type="button"
+      onClick={() => setDeleteTarget(row)}
+      aria-label={`Delete ${row.name}`}
+      className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
+    >
+      <Trash2 className="size-4" aria-hidden="true" />
+    </button>
+  );
+
+  const columns: Column<BrandRow>[] = [
     {
       key: "name",
       header: "Brand",
@@ -145,8 +211,8 @@ export function BrandsView() {
       sortValue: (row) => row.origin,
       cell: (row) => (
         <span className="text-muted-foreground">
-          {row.origin}
-          <span className="block text-[0.74rem] text-muted-foreground/70">est. {row.established}</span>
+          {row.origin || "—"}
+          {row.established ? <span className="block text-[0.74rem] text-muted-foreground/70">est. {row.established}</span> : null}
         </span>
       ),
     },
@@ -154,16 +220,16 @@ export function BrandsView() {
       key: "products",
       header: "Products",
       sortable: true,
-      sortValue: (row) => counts?.[row.slug] ?? 0,
+      sortValue: (row) => row.productCount,
       className: "text-center",
-      cell: (row) => <span className="text-muted-foreground">{counts?.[row.slug] ?? 0}</span>,
+      cell: (row) => <span className="text-muted-foreground">{row.productCount}</span>,
     },
     {
       key: "featured",
       header: "Featured",
       cell: (row) => (
         <span className="inline-flex items-center gap-2">
-          <Switch checked={Boolean(row.featured)} onCheckedChange={(v) => patchRow(row.id, { featured: v })} aria-label={`Feature ${row.name}`} />
+          <Switch checked={Boolean(row.featured)} onCheckedChange={(v) => void onToggleFeatured(row, v)} aria-label={`Feature ${row.name}`} />
           <span className="text-[0.76rem] text-muted-foreground">{row.featured ? "Featured" : "Standard"}</span>
         </span>
       ),
@@ -177,7 +243,7 @@ export function BrandsView() {
           <Select
             aria-label={`Accent for ${row.name}`}
             value={row.accent}
-            onChange={(e) => patchRow(row.id, { accent: e.target.value as Brand["accent"] })}
+            onChange={(e) => void onChangeAccent(row, e.target.value as Brand["accent"])}
             className="h-9 w-32 text-[0.82rem]"
           >
             {ACCENT_OPTIONS.map((opt) => (
@@ -190,32 +256,34 @@ export function BrandsView() {
       ),
     },
     {
-      key: "public",
-      header: "Public page",
+      key: "actions",
+      header: "",
+      className: "w-20 text-right",
       cell: (row) => (
-        <Link
-          href={`/brand/${row.slug}`}
-          className="inline-flex items-center gap-1.5 text-[0.8rem] font-medium text-violet-soft transition-colors hover:text-foreground"
-        >
-          View
-          <ExternalLink className="size-3.5" aria-hidden="true" />
-        </Link>
+        <span className="inline-flex items-center justify-end gap-1">
+          <Link
+            href={`/brand/${row.slug}`}
+            aria-label={`Open the public page for ${row.name}`}
+            className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-violet-soft"
+          >
+            <ExternalLink className="size-4" aria-hidden="true" />
+          </Link>
+          {deleteButton(row)}
+        </span>
       ),
     },
   ];
 
-  const hasNew = Boolean(newName.trim() || newSlug.trim());
+  const hasNew = Boolean(newName.trim());
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <header>
         <h1 className="font-display text-h2 font-bold tracking-tight text-foreground">Brands</h1>
         <p className="mt-1.5 max-w-2xl text-[0.92rem] text-muted-foreground">
-          The brand directory — names, taglines, origins, product counts, featured flags and accent colors.
+          The brand directory — names, taglines, product counts, featured flags and accent colors. Changes save immediately.
         </p>
       </header>
-
-      <PrototypeNotice>The brand directory reads live from the database. Creating brands and toggling featured or accent from this console are not saved yet.</PrototypeNotice>
 
       {error ? (
         <ErrorState body={error} onRetry={retry} />
@@ -240,14 +308,13 @@ export function BrandsView() {
               </div>
               <p className="mt-1 font-mono text-[0.76rem] text-muted-foreground">{row.slug}</p>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-3">
-                <span className="text-[0.8rem] text-muted-foreground">
-                  {counts?.[row.slug] ?? 0} products · {row.origin} · est. {row.established}
-                </span>
+                <span className="text-[0.8rem] text-muted-foreground">{row.productCount} products</span>
                 <span className="inline-flex items-center gap-2">
-                  <Switch checked={Boolean(row.featured)} onCheckedChange={(v) => patchRow(row.id, { featured: v })} aria-label={`Feature ${row.name}`} />
+                  <Switch checked={Boolean(row.featured)} onCheckedChange={(v) => void onToggleFeatured(row, v)} aria-label={`Feature ${row.name}`} />
                   <Link href={`/brand/${row.slug}`} aria-label={`Open the public page for ${row.name}`} className="text-violet-soft">
                     <ExternalLink className="size-4" aria-hidden="true" />
                   </Link>
+                  {deleteButton(row)}
                 </span>
               </div>
             </div>
@@ -256,13 +323,13 @@ export function BrandsView() {
         />
       ) : null}
 
-      <FormSection title="Add brand" description="Adds a row to this view — brand writes are not wired into the console yet.">
+      <FormSection title="Add brand" description="Creates a real brand with an auto-generated, unique slug.">
         <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10.5rem_auto]">
-          <FormField label="Name" htmlFor="new-brand-name">
-            <TextInput id="new-brand-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Nasty Juice" className="h-10" />
+          <FormField label="Name" htmlFor="new-brand-name" required>
+            <TextInput id="new-brand-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Nasty Juice" maxLength={80} className="h-10" />
           </FormField>
-          <FormField label="Slug" htmlFor="new-brand-slug" hint="Lowercase letters, numbers, hyphens.">
-            <TextInput id="new-brand-slug" value={newSlug} onChange={(e) => setNewSlug(e.target.value)} placeholder="nasty-juice" className="h-10 font-mono text-[0.84rem]" />
+          <FormField label="Tagline" htmlFor="new-brand-tagline">
+            <TextInput id="new-brand-tagline" value={newTagline} onChange={(e) => setNewTagline(e.target.value)} placeholder="Short LED-chip line" maxLength={200} className="h-10" />
           </FormField>
           <FormField label="Accent" htmlFor="new-brand-accent">
             <Select id="new-brand-accent" value={newAccent} onChange={(e) => setNewAccent(e.target.value as Brand["accent"])} className="h-10">
@@ -275,17 +342,47 @@ export function BrandsView() {
           </FormField>
           <button
             type="button"
-            onClick={addBrand}
+            onClick={() => void addBrand()}
+            disabled={!hasNew || creating}
             className={cn(
-              "inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-medium transition-all",
+              "inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-medium transition-all disabled:opacity-50",
               hasNew ? "bg-primary text-primary-foreground hover:brightness-110" : "border border-line text-muted-foreground hover:text-foreground"
             )}
           >
             <Plus className="size-4" aria-hidden="true" />
-            Add brand
+            {creating ? "Adding…" : "Add brand"}
           </button>
         </div>
       </FormSection>
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{deleteTarget?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Brands with products attached cannot be deleted — move those products to another brand first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmDelete();
+              }}
+              className="bg-error text-white hover:bg-error/90"
+            >
+              {deleting ? "Deleting…" : "Delete brand"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

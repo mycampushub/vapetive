@@ -22,9 +22,6 @@ import type { KVNamespaceLike } from "@/server/kv";
 let injected = false;
 
 /** True once Worker bindings have been mapped onto the globalThis contract. */
-export function bindingsInjected(): boolean {
-  return injected;
-}
 
 /**
  * Idempotent, lazy binding injection. Safe to call on every storage access:

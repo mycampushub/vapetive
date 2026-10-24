@@ -19,6 +19,8 @@ const PUBLIC_ACCOUNT_PATHS = new Set([
   "/account/verify",
 ]);
 
+// Edge modules cannot import src/server/env.ts (node deps) — this MUST stay
+// in sync with SESSION_COOKIE there. If you change one, change both.
 function sessionCookieName(): string {
   return process.env.APP_ENV === "production" ? "__Host-session" : "vapetive_session";
 }

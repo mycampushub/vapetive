@@ -223,7 +223,7 @@ async function runSet(args: Args, password: string, email: string): Promise<void
     ``,
     `UPDATE users SET password_hash = '${sqlHash}', updated_at = '${now}' WHERE email = '${sqlEmail}';`,
     ``,
-    `-- Verification row (expect the new pbkdf2$sha256$600000 prefix):`,
+    `-- Verification row (expect the new pbkdf2$sha256$50000 prefix):`,
     `SELECT id, email, substr(password_hash, 1, 20) AS hash_prefix, status FROM users WHERE email = '${sqlEmail}';`,
     ``,
   ].join("\n");

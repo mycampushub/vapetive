@@ -11,7 +11,7 @@ import {
 import { logAudit } from "@/server/audit";
 import { SITE_SETTINGS_FALLBACK } from "@/server/api/bootstrap";
 
-export const GET = withApi({ requirePermission: "catalog.read" }, async () => {
+export const GET = withApi({ requirePermission: "settings.write" }, async () => {
   const [site, delivery, features] = await Promise.all([
     getSiteSettings(),
     getDeliveryConfig(),
@@ -28,9 +28,15 @@ export const GET = withApi({ requirePermission: "catalog.read" }, async () => {
   });
 });
 
+/**
+ * PATCH /api/v1/admin/settings — the settings editor sends the full edited set
+ * in ONE request; each section is merged onto its stored KV document so
+ * unspecified fields keep their current values (readers never see holes).
+ */
 const patchSchema = z.object({
   site: z
     .object({
+      name: z.string().trim().min(1).max(80).optional(),
       tagline: z.string().trim().max(200).optional(),
       description: z.string().trim().max(1000).optional(),
       complianceNotice: z.string().trim().max(1000).optional(),
@@ -43,6 +49,21 @@ const patchSchema = z.object({
           hours: z.string().trim().max(120).optional(),
         })
         .optional(),
+    })
+    .optional(),
+  legal: z
+    .object({
+      name: z.string().trim().min(1).max(160).optional(),
+    })
+    .optional(),
+  locale: z.string().trim().max(20).optional(),
+  currency: z.string().trim().max(8).optional(),
+  /** Multi-line address — stored as contact.addressLines (one line per row). */
+  address: z.string().max(2000).optional(),
+  seo: z
+    .object({
+      titleTemplate: z.string().trim().max(160).optional(),
+      defaultDescription: z.string().trim().max(1000).optional(),
     })
     .optional(),
   delivery: z
@@ -66,11 +87,24 @@ export const PATCH = withApi(
     const body = patchSchema.parse(await request.json());
     const actor = { id: identity!.user.id, label: identity!.user.displayName };
 
-    if (body.site) {
-      const patch: Record<string, unknown> = { ...body.site };
+    if (body.site || body.legal || body.locale || body.currency || body.address || body.seo) {
       const current = (await getSiteSettings()) ?? SITE_SETTINGS_FALLBACK;
-      if (body.site.contact) {
+      const patch: Record<string, unknown> = { ...(body.site ?? {}) };
+      if (body.site?.name !== undefined) patch.brandName = body.site.name;
+      if (body.legal?.name !== undefined) patch.brandLegalName = body.legal.name;
+      if (body.locale !== undefined) patch.locale = body.locale;
+      if (body.currency !== undefined) patch.currency = body.currency;
+      if (body.address !== undefined) {
+        const lines = body.address
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        patch.contact = { ...current.contact, ...(body.site?.contact ?? {}), addressLines: lines };
+      } else if (body.site?.contact) {
         patch.contact = { ...current.contact, ...body.site.contact };
+      }
+      if (body.seo) {
+        patch.seo = { ...current.seo, ...body.seo };
       }
       await updateSiteSettings(patch as never, actor);
       await logAudit({
@@ -80,8 +114,8 @@ export const PATCH = withApi(
         action: "settings.update",
         targetType: "setting",
         targetId: "site",
-        detail: `Site settings updated (${Object.keys(body.site).join(", ")})`,
-        after: body.site,
+        detail: `Site settings updated (${Object.keys(patch).join(", ")})`,
+        after: body,
         ip: meta.ip,
       });
     }
@@ -120,7 +154,9 @@ export const PATCH = withApi(
         targetType: "setting",
         targetId: "features",
         severity: "warning",
-        detail: `Feature flags updated (${Object.entries(body.features).map(([k, v]) => `${k}=${v}`).join(", ")})`,
+        detail: `Feature flags updated (${Object.entries(body.features)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(", ")})`,
         after: body.features,
         ip: meta.ip,
       });

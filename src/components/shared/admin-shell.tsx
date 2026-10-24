@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
+import { hydrateAuthFromServer, useAuth } from "@/services/account";
 import { variants } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -146,6 +147,38 @@ function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+function UserChip() {
+  // Session-derived identity. The admin layout does not mount AppBootstrap,
+  // so the shell hydrates the auth store itself (once, best-effort).
+  const user = useAuth((s) => s.user);
+  const hydrated = useAuth((s) => s.hydrated);
+  useEffect(() => {
+    if (!useAuth.getState().hydrated) void hydrateAuthFromServer();
+  }, []);
+  const displayName = (hydrated ? user?.displayName?.trim() : "") || "Staff";
+  const initials =
+    displayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "S";
+  return (
+    <div className="flex items-center gap-2.5 rounded-full border border-line py-1 pl-1 pr-3">
+      <span
+        className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-glow to-ice text-[0.7rem] font-bold text-white"
+        aria-hidden="true"
+      >
+        {initials}
+      </span>
+      <span className="hidden max-w-40 truncate text-sm font-medium text-foreground sm:block">
+        {displayName}
+      </span>
+      <span className="sr-only">Signed in as {displayName}</span>
+    </div>
+  );
+}
+
 /**
  * AdminShell — calm, information-dense admin frame.
  * Desktop: collapsible fixed sidebar. Mobile: drawer + top bar.
@@ -235,20 +268,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              aria-label="Notifications (planned)"
-              className="relative inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground"
-              title="Notifications — planned"
+            {/* The bell is an honest shortcut to the support inbox — no fake
+                unread count, notifications are not a built feature yet. */}
+            <Link
+              href="/admin/support"
+              title="Support tickets"
+              aria-label="Support tickets"
+              className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground"
             >
               <Bell className="size-[1.1rem]" aria-hidden="true" />
-              <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-violet-soft" aria-hidden="true" />
-              <span className="sr-only">Notifications inbox is planned.</span>
-            </button>
-            <div className="flex items-center gap-2.5 rounded-full border border-line py-1 pl-1 pr-3">
-              <span className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-glow to-ice text-[0.7rem] font-bold text-white">NQ</span>
-              <span className="hidden text-sm font-medium text-foreground sm:block">Nour Q.</span>
-            </div>
+            </Link>
+            <UserChip />
           </div>
         </header>
 

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function SavedPage() {
-  await requireAccountSession();
+  await requireAccountSession("/account/saved");
   return (
     <AccountPage
       title="Saved items"

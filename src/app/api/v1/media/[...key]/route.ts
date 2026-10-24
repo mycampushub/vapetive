@@ -27,13 +27,18 @@ function keyFromParams(raw: unknown): string {
 }
 
 function asset(body: BodyInit, contentType: string): NextResponse {
-  return new NextResponse(body, {
-    headers: {
-      // Object keys are unique per upload (timestamp + uuid) — immutable.
-      "Content-Type": contentType,
-      "Cache-Control": "public, max-age=31536000, immutable",
-    },
-  });
+  const headers: Record<string, string> = {
+    // Object keys are unique per upload (timestamp + uuid) — immutable.
+    "Content-Type": contentType,
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "X-Content-Type-Options": "nosniff",
+  };
+  if (contentType === "image/svg+xml") {
+    // SVG can carry scripts — sandbox it so a malicious staff upload can
+    // never execute in the site origin (stored-XSS / privilege escalation).
+    headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+  }
+  return new NextResponse(body, { headers });
 }
 
 /**

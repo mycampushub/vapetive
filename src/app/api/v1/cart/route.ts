@@ -32,6 +32,6 @@ export const DELETE = withApi({}, async ({ request, identity }) => {
     await clearCart(cart.id);
   }
   const response = ok({ ok: true });
-  void clearCartCookie;
+  clearCartCookie(response);
   return response;
 });

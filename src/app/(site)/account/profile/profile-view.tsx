@@ -90,7 +90,9 @@ export function ProfileView() {
     try {
       const result = await accountService.updateProfile({
         displayName: values.displayName,
-        phone: values.phone || undefined,
+        // Trim + null so an emptied field actually clears the stored phone
+        // (an empty string or undefined would leave the old value in place).
+        phone: values.phone.trim() || null,
       });
       setSuccess(result.message);
       form.reset(values); // baseline for dirty tracking after a save
@@ -246,7 +248,10 @@ export function ProfileView() {
             <AlertDialogCancel>Keep editing</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                form.reset();
+                // Reset to the loaded profile, not to the empty defaults —
+                // discarding should restore the saved account details.
+                const p = load.state === "success" ? load.profile : null;
+                form.reset(p ? { displayName: p.displayName, email: p.email, phone: p.phone ?? "" } : undefined);
                 setSuccess(null);
                 setError(null);
               }}

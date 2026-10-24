@@ -29,7 +29,14 @@ export async function kvGet<T>(key: string): Promise<T | null> {
   const kv = binding();
   if (kv) {
     const raw = await kv.SETTINGS?.get(key);
-    return raw ? (JSON.parse(raw) as T) : null;
+    if (!raw) return null;
+    // One corrupt KV value must not 500 every settings/nav/flags read.
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      console.error(`[kv] corrupt JSON for key "${key}" — ignoring`);
+      return null;
+    }
   }
   const db = await getDb();
   const row = await db.get<{ value_json: string }>(
@@ -58,12 +65,3 @@ export async function kvSet(key: string, value: unknown): Promise<void> {
   );
 }
 
-export async function kvDelete(key: string): Promise<void> {
-  const kv = binding();
-  if (kv) {
-    await kv.SETTINGS?.delete(key);
-    return;
-  }
-  const db = await getDb();
-  await db.run(`DELETE FROM kv_store WHERE key = ?`, [key]);
-}

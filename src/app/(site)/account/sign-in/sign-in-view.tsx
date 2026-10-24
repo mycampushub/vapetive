@@ -66,7 +66,9 @@ export function SignInView() {
       await Promise.all([mergeCartAfterSignIn(), hydrateSavedItemsFromServer(true)]);
       setSuccess(result.message);
       const next = searchParams.get("next");
-      router.push(next && next.startsWith("/") ? next : "/account");
+      // Same-origin only — a protocol-relative value ("//evil.com") would
+      // otherwise push the browser off-site after login.
+      router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/account");
       router.refresh();
     } catch {
       setError("Sign-in could not be completed. Please try again.");

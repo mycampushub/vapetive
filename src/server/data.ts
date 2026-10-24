@@ -13,7 +13,6 @@ import type {
   CatalogItem,
   ComplianceRecord,
   LegalDocument,
-  MediaAsset,
   NavigationItem,
   SiteSettings,
 } from "@/types";
@@ -83,7 +82,9 @@ export async function getProducts(): Promise<CatalogItem[]> {
   const page = await listProducts({ pageSize: 48, page: 1 });
   const items = [...page.items];
   let nextPage = 2;
-  while (page.hasMore && nextPage <= 10) {
+  // Drain the full catalog — listProducts reports hasMore, so the old
+  // hard 10-page cap would silently truncate once the store grows.
+  while (page.hasMore && nextPage <= 500) {
     const next = await listProducts({ pageSize: 48, page: nextPage });
     items.push(...next.items);
     if (!next.hasMore) break;
@@ -109,7 +110,3 @@ export async function getBrandItems(slug: string): Promise<CatalogItem[]> {
   return page.items;
 }
 
-export async function getMediaAssets(): Promise<MediaAsset[]> {
-  const assets = await listMedia();
-  return assets as unknown as MediaAsset[];
-}

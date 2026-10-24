@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { adminRoles } from "@/server/repos/admin";
 import { getCurrentIdentity } from "@/server/auth-context";
 import { hasPermission } from "@/server/rbac";
 import { UsersView } from "./users-view";
@@ -14,6 +13,5 @@ export default async function AdminUsersPage() {
   const identity = await getCurrentIdentity();
   if (!identity || !hasPermission(identity.roles, "staff.manage")) redirect("/admin");
 
-  const roles = await adminRoles();
-  return <UsersView roles={roles.map((r) => r.name)} />;
+  return <UsersView />;
 }

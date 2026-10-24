@@ -2,8 +2,20 @@ import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Inter, Orbitron, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-import { SITE_SETTINGS } from "@/data/site-settings";
 import { SITE_ORIGIN, JsonLd, organizationJsonLd, websiteJsonLd } from "@/lib/seo";
+
+/**
+ * Root metadata constants — inlined here (NOT imported from src/data, which
+ * is seed-only input). Runtime-editable settings live in KV via the settings
+ * repo and surface on pages; the root document metadata stays static.
+ */
+const BRAND = {
+  name: "VAPETIVE",
+  legalName: "Vapetive Trading L.L.C.",
+  tagline: "The UAE's #1 vape shop for instant online delivery",
+  description:
+    "Vapetive is the UAE's #1 vape shop for instant online delivery. Shop authentic disposable vapes, pod systems and e-liquids with transparent AED pricing, age-verified UAE-wide delivery and same-day dispatch from Dubai.",
+} as const;
 
 const inter = Inter({
   variable: "--font-inter",
@@ -45,9 +57,9 @@ export const metadata: Metadata = {
     default: "Vapetive — #1 Vape Shop in UAE | Instant Vape Delivery Online",
     // Pipe separator keeps generated titles scannable in SERPs while the
     // page-level titles carry the primary keywords.
-    template: `%s | ${SITE_SETTINGS.brandName}`,
+    template: `%s | ${BRAND.name}`,
   },
-  description: SITE_SETTINGS.description,
+  description: BRAND.description,
   keywords: [
     "vape shop UAE",
     "vape shop Dubai",
@@ -75,25 +87,25 @@ export const metadata: Metadata = {
     "authentic vape UAE",
     "Vapetive",
   ],
-  applicationName: SITE_SETTINGS.brandName,
-  authors: [{ name: SITE_SETTINGS.brandLegalName }],
+  applicationName: BRAND.name,
+  authors: [{ name: BRAND.legalName }],
   robots: {
     index: true,
     follow: true,
     googleBot: { index: true, follow: true },
   },
   openGraph: {
-    title: `${SITE_SETTINGS.brandName} — ${SITE_SETTINGS.tagline}`,
-    description: SITE_SETTINGS.description,
-    siteName: SITE_SETTINGS.brandName,
+    title: `${BRAND.name} — ${BRAND.tagline}`,
+    description: BRAND.description,
+    siteName: BRAND.name,
     type: "website",
     locale: "en_AE",
-    images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: `${SITE_SETTINGS.brandName} — ${SITE_SETTINGS.tagline}` }],
+    images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: `${BRAND.name} — ${BRAND.tagline}` }],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_SETTINGS.brandName} — ${SITE_SETTINGS.tagline}`,
-    description: SITE_SETTINGS.description,
+    title: `${BRAND.name} — ${BRAND.tagline}`,
+    description: BRAND.description,
     images: ["/og-image.jpg"],
   },
   icons: {

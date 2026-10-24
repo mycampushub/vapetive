@@ -34,9 +34,16 @@ export const POST = withApi(
         targetType: "user",
         targetId: body.email,
         severity: "warning",
-        detail: "Invalid credentials",
+        detail: result.reason === "suspended" ? "Suspended account sign-in attempt" : "Invalid credentials",
         ip: meta.ip,
       });
+      // Distinct message for suspended accounts (password was verified —
+      // telling them to contact support ends the futile retry loop). This
+      // only fires after a CORRECT password, so it does not enable
+      // account enumeration.
+      if (result.reason === "suspended") {
+        return fail(403, ErrorCode.FORBIDDEN, "This account is suspended — contact support for help.");
+      }
       return fail(401, ErrorCode.UNAUTHORIZED, "Email or password is incorrect.");
     }
 

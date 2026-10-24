@@ -1,8 +1,12 @@
 import { z } from "zod";
 import { withApi, ok, fail, ErrorCode } from "@/server/api/guard";
 import { transitionOrder } from "@/server/repos/orders";
-import type { OrderStatus } from "@/types";
 
+/**
+ * The transition target set mirrors OrderStatus exactly (see TRANSITIONS in
+ * repos/orders.ts — the state machine itself decides which hops are legal;
+ * "returned" was never a real status and always 409'd).
+ */
 const bodySchema = z.object({
   toStatus: z.enum([
     "placed",
@@ -12,7 +16,6 @@ const bodySchema = z.object({
     "shipped",
     "delivered",
     "cancelled",
-    "returned",
   ]),
   note: z.string().trim().max(500).optional(),
 });
@@ -24,7 +27,7 @@ export const POST = withApi(
     const body = bodySchema.parse(await request.json());
     const result = await transitionOrder(
       params.reference,
-      body.toStatus as OrderStatus,
+      body.toStatus,
       { id: identity!.user.id, label: identity!.user.displayName },
       body.note
     );

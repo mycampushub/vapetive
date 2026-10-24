@@ -1,49 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Package, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Package, Pencil, Plus, Trash2 } from "lucide-react";
+import { adminService } from "@/services/admin";
 import { catalogService } from "@/services/catalog";
-import { DataTable, FilterBar, SearchField, type Column } from "@/components/shared/admin-primitives";
-import { AvailabilityBadge, StatusBadge } from "@/components/shared/status-badge";
+import { brandsService } from "@/services/brands";
+import { DataTable, FilterBar, Pagination, SearchField, type Column } from "@/components/shared/admin-primitives";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
-import { PrototypeNotice } from "@/components/shared/prototype-notice";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { FormField, Select, TextInput } from "@/components/forms/fields";
 import { useToast } from "@/hooks/use-toast";
-import type { Availability, CatalogCategory, CatalogItem } from "@/types";
+import { formatAED } from "@/lib/utils";
+import type { AdminProductSummary, Brand, CatalogCategory } from "@/types";
 
 /* ------------------------------ helpers --------------------------- */
 
-/** Header CTA — product creation is not wired yet (no POST endpoint); the toast keeps expectations honest. */
-function AddProductButton() {
-  const { toast } = useToast();
-  return (
-    <button
-      type="button"
-      onClick={() =>
-        toast({
-          title: "Creation not available yet",
-          description: "New products are provisioned through the catalog import — existing products are fully editable in this console.",
-        })
-      }
-      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110"
-    >
-      <Plus className="size-4" aria-hidden="true" />
-      Add product
-    </button>
+type StatusFilter = "all" | "published" | "draft";
+
+const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "published", label: "Published" },
+  { value: "draft", label: "Drafts" },
+];
+
+const PAGE_SIZE = 24;
+
+function statusBadge(product: AdminProductSummary) {
+  return product.published ? (
+    <StatusBadge tone="success">Published</StatusBadge>
+  ) : (
+    <StatusBadge tone="neutral">Draft</StatusBadge>
   );
 }
-
-
-type AvailabilityFilter = Extract<Availability, "in_stock" | "low_stock" | "out_of_stock" | "unavailable">;
-
-const AVAILABILITY_OPTIONS: Array<{ value: AvailabilityFilter | "all"; label: string }> = [
-  { value: "all", label: "Any availability" },
-  { value: "in_stock", label: "In stock" },
-  { value: "low_stock", label: "Low stock" },
-  { value: "out_of_stock", label: "Out of stock" },
-  { value: "unavailable", label: "Unavailable" },
-];
 
 function TableSkeleton() {
   return (
@@ -58,42 +60,223 @@ function TableSkeleton() {
   );
 }
 
+/* --------------------------- create dialog ------------------------- */
+
+function CreateProductDialog({
+  open,
+  onOpenChange,
+  categories,
+  brands,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  categories: CatalogCategory[];
+  brands: Brand[];
+  onCreated: () => void;
+}) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [name, setName] = useState("");
+  const [sku, setSku] = useState("");
+  const [price, setPrice] = useState("");
+  const [brandId, setBrandId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [tagline, setTagline] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setName("");
+    setSku("");
+    setPrice("");
+    setTagline("");
+    setBrandId(brands[0]?.id ?? "");
+    setCategoryId(categories[0]?.id ?? "");
+  }, [open, brands, categories]);
+
+  const priceCents = Math.round(Number(price) * 100);
+  const valid =
+    name.trim().length > 0 &&
+    sku.trim().length > 0 &&
+    price.trim() !== "" &&
+    Number.isFinite(priceCents) &&
+    priceCents >= 0 &&
+    brandId !== "" &&
+    categoryId !== "";
+
+  const submit = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      const created = await adminService.createProduct({
+        name: name.trim(),
+        sku: sku.trim(),
+        categoryId,
+        brandId,
+        priceCents,
+        ...(tagline.trim() ? { tagline: tagline.trim() } : {}),
+      });
+      toast({ title: "Draft created", description: `${name.trim()} is saved as a draft — finish the listing in the editor.` });
+      onOpenChange(false);
+      onCreated();
+      router.push(`/admin/catalog/products/${created.id}`);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not create the product",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent aria-describedby={undefined} className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-display">New product</DialogTitle>
+          <DialogDescription>
+            Creates an unpublished draft with zero stock — pricing, images, variants and publish state are edited next.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+          className="grid gap-4 sm:grid-cols-2"
+        >
+          <FormField label="Name" htmlFor="new-product-name" required className="sm:col-span-2">
+            <TextInput id="new-product-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} placeholder="e.g. Zephyr Shortfill 60" />
+          </FormField>
+          <FormField label="SKU" htmlFor="new-product-sku" required>
+            <TextInput id="new-product-sku" value={sku} onChange={(e) => setSku(e.target.value)} maxLength={64} placeholder="ZEPH-60-000" className="font-mono" />
+          </FormField>
+          <FormField label="Price (AED)" htmlFor="new-product-price" required>
+            <TextInput
+              id="new-product-price"
+              type="number"
+              min={0}
+              step="0.01"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="60"
+            />
+          </FormField>
+          <FormField label="Brand" htmlFor="new-product-brand" required>
+            <Select id="new-product-brand" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+              <option value="" disabled>
+                Select a brand…
+              </option>
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label="Category" htmlFor="new-product-category" required>
+            <Select id="new-product-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+              <option value="" disabled>
+                Select a category…
+              </option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label="Tagline (optional)" htmlFor="new-product-tagline" className="sm:col-span-2">
+            <TextInput id="new-product-tagline" value={tagline} onChange={(e) => setTagline(e.target.value)} maxLength={240} placeholder="Short LED-chip line for cards" />
+          </FormField>
+          <DialogFooter className="sm:col-span-2">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex min-h-10 items-center rounded-full border border-line px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!valid || saving}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 disabled:opacity-50"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              {saving ? "Creating…" : "Create draft"}
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ------------------------------- view ----------------------------- */
 
 export function ProductsListView() {
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<string | "all">("all");
-  const [availability, setAvailability] = useState<AvailabilityFilter | "all">("all");
-  const [items, setItems] = useState<CatalogItem[] | null>(null);
-  const [categories, setCategories] = useState<CatalogCategory[] | null>(null);
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [page, setPage] = useState(1);
+
+  const [result, setResult] = useState<AdminProductSummary[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  const [categories, setCategories] = useState<CatalogCategory[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AdminProductSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Debounce the search field (350 ms) before it hits the API.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery(searchInput.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     let alive = true;
     catalogService
       .categories()
-      .then((d) => {
-        if (alive) setCategories(d);
-      })
-      .catch(() => {
-        /* category chips fall back to raw slugs if this fails */
-      });
+      .then((d) => alive && setCategories(d))
+      .catch(() => undefined);
+    brandsService
+      .brands()
+      .then((d) => alive && setBrands(d))
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [reloadKey]);
+  }, []);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Clamp the requested page into the live range so deleting the last row of
+  // the last page lands on the new final page instead of a stale empty one.
+  const safePage = Math.min(page, pageCount);
 
   useEffect(() => {
     let alive = true;
-    catalogService
-      .items({ query, categorySlug: category === "all" ? undefined : category, availability, pageSize: 48 })
-      .then((d) => {
-        if (alive) {
-          setItems(d.items);
-          setError(null);
-        }
+    setLoading(true);
+    adminService
+      .products({ q: query || undefined, status, page: safePage, pageSize: PAGE_SIZE })
+      .then((data) => {
+        if (!alive) return;
+        setResult(data.items);
+        setTotal(data.total);
+        setError(null);
       })
       .catch((e: unknown) => {
         if (alive) setError(e instanceof Error ? e.message : "Failed to load products.");
@@ -104,113 +287,154 @@ export function ProductsListView() {
     return () => {
       alive = false;
     };
-  }, [query, category, availability, reloadKey]);
+  }, [query, status, safePage, reloadKey]);
 
-  const onQueryChange = (next: string) => {
-    setQuery(next);
-    setLoading(true);
-  };
-  const onCategoryChange = (next: string | "all") => {
-    setCategory(next);
-    setLoading(true);
-  };
-  const onAvailabilityChange = (next: AvailabilityFilter | "all") => {
-    setAvailability(next);
-    setLoading(true);
-  };
+  const hasFilters = query !== "" || status !== "all";
+
   const retry = () => {
     setError(null);
-    setLoading(true);
     setReloadKey((k) => k + 1);
   };
   const clearFilters = () => {
+    setSearchInput("");
     setQuery("");
-    setCategory("all");
-    setAvailability("all");
-    setError(null);
-    setLoading(true);
+    setStatus("all");
+    setPage(1);
   };
 
-  const categoryLabel = (slug: string) => categories?.find((c) => c.slug === slug)?.name ?? slug;
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      await adminService.deleteProduct(deleteTarget.id);
+      toast({ title: "Product deleted", description: `${deleteTarget.name} was removed from the catalog.` });
+      setDeleteTarget(null);
+      // One row left the current filter set — if this page would now sit past
+      // the final page, fall back to the clamped page so the view stays live.
+      const remaining = Math.max(0, total - 1);
+      const nextPageCount = Math.max(1, Math.ceil(remaining / PAGE_SIZE));
+      setPage((prev) => Math.min(prev, nextPageCount));
+      setReloadKey((k) => k + 1);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
-  const columns: Column<CatalogItem>[] = [
-    {
-      key: "name",
-      header: "Name",
-      sortable: true,
-      sortValue: (row) => row.name,
-      cell: (row) => (
-        <Link
-          href={`/admin/catalog/products/${row.id}`}
-          className="font-medium text-foreground transition-colors hover:text-violet-soft"
-        >
-          {row.name}
-        </Link>
-      ),
-    },
-    {
-      key: "sku",
-      header: "SKU",
-      sortable: true,
-      sortValue: (row) => row.sku,
-      cell: (row) => <code className="font-mono text-[0.78rem] text-muted-foreground">{row.sku}</code>,
-    },
-    {
-      key: "category",
-      header: "Category",
-      sortable: true,
-      sortValue: (row) => row.categorySlug,
-      cell: (row) => <span className="text-muted-foreground">{categoryLabel(row.categorySlug)}</span>,
-    },
-    {
-      key: "variants",
-      header: "Variants",
-      sortable: true,
-      sortValue: (row) => row.variants.length,
-      className: "text-center",
-      cell: (row) => <span className="text-muted-foreground">{row.variants.length}</span>,
-    },
-    {
-      key: "availability",
-      header: "Availability",
-      cell: (row) => <AvailabilityBadge availability={row.availability} />,
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: () => (
-        <StatusBadge tone="success" icon={CheckCircle2}>
-          Published
-        </StatusBadge>
-      ),
-    },
-  ];
+  const columns: Column<AdminProductSummary>[] = useMemo(
+    () => [
+      {
+        key: "name",
+        header: "Product",
+        sortable: true,
+        sortValue: (row) => row.name,
+        cell: (row) => (
+          <span className="block">
+            <Link
+              href={`/admin/catalog/products/${row.id}`}
+              className="font-medium text-foreground transition-colors hover:text-violet-soft"
+            >
+              {row.name}
+            </Link>
+            <span className="mt-0.5 block max-w-xs truncate text-[0.74rem] text-muted-foreground">
+              {row.brandName} · {row.categoryName}
+            </span>
+          </span>
+        ),
+      },
+      {
+        key: "sku",
+        header: "SKU",
+        sortable: true,
+        sortValue: (row) => row.sku,
+        cell: (row) => <code className="font-mono text-[0.76rem] text-muted-foreground">{row.sku}</code>,
+      },
+      {
+        key: "price",
+        header: "Price",
+        sortable: true,
+        sortValue: (row) => row.priceCents,
+        cell: (row) => (
+          <span className="whitespace-nowrap font-medium text-foreground">{formatAED(row.priceCents / 100)}</span>
+        ),
+      },
+      {
+        key: "stock",
+        header: "Stock",
+        sortable: true,
+        sortValue: (row) => row.qtyOnHand,
+        className: "text-center",
+        cell: (row) => (
+          <span className={row.qtyOnHand <= 0 ? "text-warning" : "text-muted-foreground"}>{row.qtyOnHand}</span>
+        ),
+      },
+      {
+        key: "status",
+        header: "Status",
+        cell: statusBadge,
+      },
+      {
+        key: "actions",
+        header: "",
+        className: "w-20 text-right",
+        cell: (row) => (
+          <span className="inline-flex items-center justify-end gap-1">
+            <Link
+              href={`/admin/catalog/products/${row.id}`}
+              aria-label={`Edit ${row.name}`}
+              className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground"
+            >
+              <Pencil className="size-4" aria-hidden="true" />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(row)}
+              aria-label={`Delete ${row.name}`}
+              className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+            </button>
+          </span>
+        ),
+      },
+    ],
+    []
+  );
 
-  const mobileCard = (row: CatalogItem) => (
+  const mobileCard = (row: AdminProductSummary) => (
     <div className="rounded-2xl border border-line bg-elevated/40 p-4">
       <div className="flex items-start justify-between gap-3">
         <Link href={`/admin/catalog/products/${row.id}`} className="font-display text-[0.98rem] font-semibold text-foreground">
           {row.name}
         </Link>
-        <AvailabilityBadge availability={row.availability} />
+        {statusBadge(row)}
       </div>
-      <p className="mt-1 font-mono text-[0.76rem] text-muted-foreground">{row.sku}</p>
+      <p className="mt-1 font-mono text-[0.74rem] text-muted-foreground">{row.sku}</p>
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-line/60 pt-3 text-[0.8rem] text-muted-foreground">
         <span>
-          {categoryLabel(row.categorySlug)} · {row.variants.length} {row.variants.length === 1 ? "variant" : "variants"}
+          {formatAED(row.priceCents / 100)} · {row.qtyOnHand} in stock
         </span>
-        <StatusBadge tone="success" icon={CheckCircle2}>
-          Published
-        </StatusBadge>
+        <span className="inline-flex items-center gap-2">
+          <Link href={`/admin/catalog/products/${row.id}`} aria-label={`Edit ${row.name}`} className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground">
+            <Pencil className="size-4" aria-hidden="true" />
+          </Link>
+          <button
+            type="button"
+            onClick={() => setDeleteTarget(row)}
+            aria-label={`Delete ${row.name}`}
+            className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-error/10 hover:text-error"
+          >
+            <Trash2 className="size-4" aria-hidden="true" />
+          </button>
+        </span>
       </div>
     </div>
   );
-
-  const hasFilters = query.trim() !== "" || category !== "all" || availability !== "all";
-  const categoryOptions: Array<{ value: string | "all"; label: string }> = [
-    { value: "all", label: "All categories" },
-    ...(categories ?? []).map((c) => ({ value: c.slug, label: c.name })),
-  ];
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -219,66 +443,112 @@ export function ProductsListView() {
           <p className="text-[0.7rem] font-medium uppercase tracking-[0.22em] text-violet-soft">Catalog</p>
           <h1 className="mt-1 font-display text-h2 font-bold tracking-tight text-foreground">Products</h1>
           <p className="mt-1.5 max-w-2xl text-[0.92rem] text-muted-foreground">
-            Every catalog record with variants, availability and conformity data.
+            Every catalog record — drafts included — with pricing, stock and publish state.
           </p>
         </div>
-        <AddProductButton />
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          Add product
+        </button>
       </header>
-
-      <PrototypeNotice>
-        Live catalog records from the products database — open a product to edit pricing, copy, stock and publish state.
-      </PrototypeNotice>
 
       <div className="space-y-3">
         <SearchField
-          value={query}
-          onChange={onQueryChange}
-          label="Search products by name, brand or tagline"
-          placeholder="Search name, brand or tagline…"
+          value={searchInput}
+          onChange={setSearchInput}
+          label="Search products by name or SKU"
+          placeholder="Search name or SKU…"
           className="w-full lg:w-80"
         />
-        <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-          <FilterBar
-            options={categoryOptions}
-            value={category}
-            onChange={onCategoryChange}
-            ariaLabel="Filter products by category"
-          />
-          <FilterBar
-            options={AVAILABILITY_OPTIONS}
-            value={availability}
-            onChange={onAvailabilityChange}
-            ariaLabel="Filter products by availability"
-          />
-        </div>
+        <FilterBar
+          options={STATUS_OPTIONS}
+          value={status}
+          onChange={(next) => {
+            setStatus(next as StatusFilter);
+            setPage(1);
+          }}
+          ariaLabel="Filter products by publish status"
+        />
       </div>
 
       {error ? (
         <ErrorState body={error} onRetry={retry} />
-      ) : loading && !items ? (
+      ) : loading && !result ? (
         <TableSkeleton />
-      ) : items && items.length === 0 ? (
+      ) : result && result.length === 0 ? (
         <EmptyState
           icon={Package}
-          title="No products match"
-          body="Try a different search, category or availability filter."
-          {...(hasFilters ? { actionLabel: "Clear filters", onAction: clearFilters } : {})}
+          title={hasFilters ? "No products match" : "No products yet"}
+          body={
+            hasFilters
+              ? "Try a different search or status filter."
+              : "Create your first draft product — it stays hidden until you publish it."
+          }
+          {...(hasFilters
+            ? { actionLabel: "Clear filters", onAction: clearFilters }
+            : { actionLabel: "Add product", onAction: () => setCreateOpen(true) })}
         />
-      ) : items ? (
+      ) : result ? (
         <>
           <DataTable
             columns={columns}
-            rows={items}
+            rows={result}
             initialSort={{ key: "name", dir: "asc" }}
-            caption="Catalog products"
+            caption="Catalog products (drafts and published)"
             mobileCard={mobileCard}
             emptyMessage="No products match the current filters."
           />
-          <p className="text-[0.78rem] text-muted-foreground">
-            Showing {items.length} catalog records{hasFilters ? " (filtered)" : ""}.
-          </p>
+          <div className="flex flex-col items-center gap-3">
+            <Pagination page={safePage} pageCount={pageCount} onChange={setPage} ariaLabel="Product list pages" />
+            <p className="text-[0.78rem] text-muted-foreground">
+              Showing {result.length} of {total} product{total === 1 ? "" : "s"}
+              {hasFilters ? " (filtered)" : ""}.
+            </p>
+          </div>
         </>
       ) : null}
+
+      <CreateProductDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        categories={categories}
+        brands={brands}
+        onCreated={() => setReloadKey((k) => k + 1)}
+      />
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{deleteTarget?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the product, its variants, images, specs and documents from the catalog.
+              Products referenced by orders or saved items cannot be deleted — unpublish those instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmDelete();
+              }}
+              className="bg-error text-white hover:bg-error/90"
+            >
+              {deleting ? "Deleting…" : "Delete product"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

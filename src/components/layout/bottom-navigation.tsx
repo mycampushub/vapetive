@@ -45,6 +45,9 @@ export function BottomNavigation({ items }: { items: NavigationItem[] }) {
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
+                aria-label={
+                  item.href === "/cart" ? `Cart${cartCount > 0 ? `, ${cartCount} item(s)` : ""}` : undefined
+                }
                 className={cn(
                   "relative mx-auto flex min-h-[3.5rem] w-full flex-col items-center justify-center gap-1 rounded-xl px-1 pt-1.5 text-[0.62rem] font-medium tracking-wide transition-colors",
                   active ? "text-foreground" : "text-muted-foreground hover:text-foreground"

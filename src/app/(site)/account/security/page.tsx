@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function SecurityPage() {
-  await requireAccountSession();
+  await requireAccountSession("/account/security");
   return (
     <AccountPage
       title="Security"

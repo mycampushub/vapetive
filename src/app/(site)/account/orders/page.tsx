@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function OrdersPage() {
-  await requireAccountSession();
+  await requireAccountSession("/account/orders");
   return (
     <AccountPage
       title="Order history"

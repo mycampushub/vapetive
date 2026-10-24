@@ -4,8 +4,6 @@ import { notFound } from "next/navigation";
 import { getLegalDocumentBySlug, getLegalDocuments } from "@/server/data";
 import { LegalDocumentTemplate } from "@/components/legal/legal-document-template";
 
-export const revalidate = 3600; // ISR: DB-driven content re-renders hourly even if baked from a stale build DB
-
 export async function generateMetadata(): Promise<Metadata> {
   const doc = await getLegalDocumentBySlug("consumer-information");
   return {
