@@ -55,7 +55,7 @@ NEXT_PUBLIC_SITE_URL = "https://vapetive.demo-web.workers.dev/"
 [[d1_databases]]
 binding = "DB"
 database_name = "vapetive"
-database_id = "cd327431-eb34-4c18-8a82-30ca1d9714e5"
+database_id = "ff255213-4967-4a64-9593-f51248cace2f"
 
 # --- R2: media upload pipeline (src/app/api/v1/admin/media POST) -------------
 [[r2_buckets]]
