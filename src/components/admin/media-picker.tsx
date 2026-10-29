@@ -1,35 +1,49 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ImageIcon, Images, Search } from "lucide-react";
+import { CloudUpload, ImageIcon, Images, Loader2, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { mediaService } from "@/services/media";
 import { cn } from "@/lib/utils";
 import type { MediaAsset } from "@/types";
 
+const UPLOAD_ACCEPT = "image/jpeg,image/png,image/webp,image/avif,image/gif,image/svg+xml";
+
 /**
- * MediaPicker — dialog over the media library (images only).
- * Selecting an asset hands { mediaAssetId, url, alt } to the caller so
- * product images always reference a real media_assets row (FK is RESTRICT).
+ * MediaPicker — dialog over the media library (images only) with DIRECT
+ * upload. Selecting (or uploading) an asset hands
+ * { mediaAssetId, url, alt } to the caller so product images always
+ * reference a real media_assets row (FK is RESTRICT). Uploaded files are
+ * persisted through the media API, so they land in the library for every
+ * other surface (gallery, brand/category pickers) automatically.
  * External URLs are intentionally out of scope — every product image must
- * resolve to an uploaded library asset.
+ * resolve to a stored asset.
  */
 export function MediaPicker({
   open,
   onOpenChange,
   onSelect,
-  title = "Pick from library",
+  title = "Product image",
+  uploadFolder = "products",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (asset: { mediaAssetId: string; url: string; alt: string | null }) => void;
   title?: string;
+  /** Library folder new uploads are filed under. */
+  uploadFolder?: string;
 }) {
   const [assets, setAssets] = useState<MediaAsset[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [failedThumbs, setFailedThumbs] = useState<Set<string>>(() => new Set());
+
+  // Upload state — one file at a time, with drag & drop.
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -50,6 +64,17 @@ export function MediaPicker({
     };
   }, [open]);
 
+  // Reset transient upload state when the dialog closes (in the change
+  // handler — no setState-in-effect).
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      setUploadError(null);
+      setDragOver(false);
+      setUploading(false);
+    }
+    onOpenChange(next);
+  };
+
   // Loading is derived — the fetch runs each time the dialog opens.
   const loading = open && assets === null && error === null;
 
@@ -63,20 +88,103 @@ export function MediaPicker({
 
   const pick = (asset: MediaAsset) => {
     onSelect({ mediaAssetId: asset.id, url: asset.url, alt: asset.alt ?? null });
-    onOpenChange(false);
+    handleOpenChange(false);
     setSearch("");
   };
 
+  const uploadFile = async (file: File) => {
+    if (uploading) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const asset = await mediaService.upload(file, { folder: uploadFolder });
+      // Show the new asset in the grid immediately, then hand it to the
+      // caller — the image is persisted in media_assets, so the library
+      // (gallery page) lists it from now on.
+      setAssets((prev) => (prev ? [asset, ...prev] : [asset]));
+      setUploading(false);
+      pick(asset);
+    } catch (e) {
+      setUploading(false);
+      setUploadError(e instanceof Error ? e.message : "Upload failed — try again.");
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="font-display">{title}</DialogTitle>
           <DialogDescription>
-            Images from the uploaded media library. External URLs are not supported here — upload files in the
-            media library first so every product image resolves to a stored asset.
+            Pick from the library or upload a new image below — uploads are stored as library assets (the gallery
+            page lists them) and attach to this product immediately. External URLs are not supported.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Direct upload — drag & drop or browse. The upload goes through the
+            media API, lands in the library, and is selected automatically. */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Upload a new image"
+          aria-disabled={uploading}
+          onClick={() => !uploading && fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (!uploading && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!uploading) setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) void uploadFile(file);
+          }}
+          className={cn(
+            "flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-line-strong bg-foreground/[0.02] px-4 py-3.5 transition-colors",
+            "hover:border-violet-glow/60 hover:bg-violet-glow/[0.04]",
+            dragOver && "border-violet-glow/70 bg-violet-glow/[0.07]",
+            uploading && "pointer-events-none opacity-60"
+          )}
+        >
+          {uploading ? (
+            <Loader2 className="size-5 shrink-0 animate-spin text-violet-soft" aria-hidden="true" />
+          ) : (
+            <CloudUpload className="size-5 shrink-0 text-violet-soft" aria-hidden="true" />
+          )}
+          <span className="min-w-0 text-left">
+            <span className="block text-[0.84rem] font-medium text-foreground">
+              {uploading ? "Uploading…" : "Upload a new image"}
+            </span>
+            <span className="block truncate text-[0.72rem] text-muted-foreground">
+              Drag &amp; drop or browse — JPEG, PNG, WebP, AVIF, GIF or SVG, up to 10 MB. Filed under “
+              {uploadFolder}”.
+            </span>
+          </span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={UPLOAD_ACCEPT}
+            className="sr-only"
+            aria-label="Choose an image file to upload"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void uploadFile(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+        {uploadError && (
+          <p role="alert" className="text-[0.78rem] text-error">
+            {uploadError}
+          </p>
+        )}
 
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -106,7 +214,7 @@ export function MediaPicker({
               <Images className="size-6 text-muted-foreground" aria-hidden="true" />
               <p className="text-sm text-muted-foreground">
                 {assets && assets.length === 0
-                  ? "The media library has no images yet — upload some from the Media page."
+                  ? "The media library has no images yet — upload one above."
                   : "No images match that search."}
               </p>
             </div>

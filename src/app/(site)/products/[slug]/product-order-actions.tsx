@@ -50,7 +50,7 @@ export function ProductOrderActions({ item }: { item: CatalogItem }) {
 
   return (
     <>
-      <VariantPicker variants={item.variants} value={selection} onChange={setSelection} />
+      <VariantPicker variants={item.variants} value={selection} onChange={setSelection} origin={item.origin} />
 
       <div className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row">

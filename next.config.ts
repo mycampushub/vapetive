@@ -10,6 +10,20 @@ const nextConfig: NextConfig = {
     // islands) — smaller client bundles, faster first paint.
     optimizePackageImports: ["lucide-react", "framer-motion", "@radix-ui/react-slot"],
   },
+  async rewrites() {
+    return [
+      {
+        // Media URL compatibility — afterFiles (default) so real static
+        // files in public/uploads keep winning locally, while any
+        // /uploads/<key> URL without a static file (e.g. rows exported
+        // from a local-era database and applied to D1) resolves through
+        // the media API instead of 404ing: the route reads the same key
+        // from R2 on Workers and from public/uploads in the sandbox.
+        source: "/uploads/:path*",
+        destination: "/api/v1/media/:path*",
+      },
+    ];
+  },
   async headers() {
     return [
       {

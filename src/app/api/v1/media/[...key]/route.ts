@@ -1,7 +1,6 @@
 import { withApi, fail, ErrorCode } from "@/server/api/guard";
 import { injectWorkerBindings } from "@/server/bindings";
 import { NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -75,7 +74,17 @@ const handler = withApi({}, async ({ params }) => {
     return fail(422, ErrorCode.VALIDATION_FAILED, "Invalid media key.");
   }
   try {
-    const bytes = await readFile(filePath);
+    // node:fs is loaded via process.getBuiltinModule (same pattern as
+    // src/server/db/local.ts) rather than a static import: the Worker
+    // bundle must never carry a module-load-time fs dependency, and only
+    // this local branch ever executes it.
+    const fsPromises = (
+      process as unknown as { getBuiltinModule?: (id: string) => typeof import("node:fs/promises") }
+    ).getBuiltinModule?.("node:fs/promises");
+    if (!fsPromises) {
+      return fail(404, ErrorCode.NOT_FOUND, "Media not found.");
+    }
+    const bytes = await fsPromises.readFile(filePath);
     return asset(new Uint8Array(bytes), guessMime(key));
   } catch {
     return fail(404, ErrorCode.NOT_FOUND, "Media not found.");

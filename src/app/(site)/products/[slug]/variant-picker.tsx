@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { Globe } from "lucide-react";
 import { RadioGroup } from "@/components/forms/fields";
 import type { ItemVariant } from "@/types";
 import { cn } from "@/lib/utils";
@@ -47,10 +48,13 @@ export function VariantPicker({
   variants,
   value,
   onChange,
+  origin,
 }: {
   variants: ItemVariant[];
   value: VariantSelection;
   onChange: (next: VariantSelection) => void;
+  /** Product origin (country/line of manufacture) — shown beside the Flavour group. */
+  origin?: string;
 }) {
   const groups = useMemo(
     () =>
@@ -93,7 +97,18 @@ export function VariantPicker({
         const hasUnavailable = group.options.some((v) => !v.available);
         return (
           <fieldset key={group.type} className="space-y-2.5">
-            <legend className="text-[0.82rem] font-medium text-foreground">{group.label}</legend>
+            <legend className="flex w-full flex-wrap items-center gap-2">
+              <span className="text-[0.82rem] font-medium text-foreground">{group.label}</span>
+              {group.type === "flavor" && origin && (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-foreground/[0.03] px-2.5 py-0.5 text-[0.68rem] font-medium tracking-wide text-muted-foreground"
+                  title={`Origin: ${origin}`}
+                >
+                  <Globe className="size-3 text-violet-soft" aria-hidden="true" />
+                  Origin: {origin}
+                </span>
+              )}
+            </legend>
             <div role="group" aria-label={group.label} className="flex flex-wrap gap-2">
               {group.options.map((variant) => {
                 const isSelected = value[group.type] === variant.id;

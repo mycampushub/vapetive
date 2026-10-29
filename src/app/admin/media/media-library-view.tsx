@@ -572,6 +572,7 @@ export function MediaLibraryView() {
                               src={asset.url}
                               alt={asset.alt ?? asset.name}
                               fill
+                              unoptimized
                               sizes="(min-width: 1280px) 25vw, (min-width: 640px) 33vw, 50vw"
                               className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                               onError={() =>
@@ -673,6 +674,7 @@ export function MediaLibraryView() {
                     src={selected.url}
                     alt={selected.alt ?? selected.name}
                     fill
+                    unoptimized
                     sizes="480px"
                     className="object-cover"
                     onError={() =>

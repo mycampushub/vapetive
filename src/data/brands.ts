@@ -19,7 +19,7 @@ export const BRANDS: Brand[] = [
     tagline: "Heat-not-burn tobacco, made for ILUMA only",
     blurb: "Tobacco sticks heated, never burned — exclusively for IQOS ILUMA devices.",
     description:
-      "IQOS ILUMA is heated tobacco done differently: induction heating warms the tobacco inside each stick instead of burning it, so there is no ash, no smoke and no lighter. Every stick in the Vapetive range is prepared exclusively for the IQOS ILUMA system, with flavour families spanning smooth toasted tobaccos, cooling menthols and click-capsule Pearl editions sourced across Uzbekistan, Kyrgyzstan, Kazakhstan, Indonesia, Japan and duty-free channels.",
+      "IQOS ILUMA is heated tobacco done differently: induction heating warms the tobacco inside each stick instead of burning it, so there is no ash, no smoke and no lighter. Every stick in the Vapetive range is prepared exclusively for the IQOS ILUMA system, with flavour families spanning smooth toasted tobaccos, cooling menthols and click-capsule Pearl editions sourced across Uzbekistan, Tajikistan, Kazakhstan, Indonesia, Japan and duty-free channels.",
     origin: "Multi-origin",
     established: "2021",
     accent: "ice",

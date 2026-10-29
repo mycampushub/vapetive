@@ -19,11 +19,25 @@ import { formatAED } from "@/lib/utils";
 let currentNumber = "971500000000";
 let currentDisplay = "+971 50 000 0000";
 
+/** Subscribers notified when the number changes (settings hydration). */
+const numberListeners = new Set<(number: string) => void>();
+
+/** Subscribe to number changes — returns an unsubscribe function. */
+export function onWhatsAppNumberChange(listener: (number: string) => void): () => void {
+  numberListeners.add(listener);
+  return () => {
+    numberListeners.delete(listener);
+  };
+}
+
 /** Update the number from site settings (digits extracted automatically). */
 export function setWhatsAppNumber(raw: string): void {
   const digits = raw.replace(/\D/g, "");
   if (digits.length >= 8) currentNumber = digits;
   currentDisplay = raw.trim() || currentDisplay;
+  for (const listener of numberListeners) {
+    listener(currentNumber);
+  }
 }
 
 export function getWhatsAppNumber(): string {

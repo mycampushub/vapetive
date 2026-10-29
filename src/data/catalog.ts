@@ -84,7 +84,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [];
  */
 
 const ILUMA_ORIGIN = {
-  multi: "Uzbekistan, Kyrgyzstan, Kazakhstan, Indonesia & Duty Free",
+  multi: "Uzbekistan, Tajikistan, Kazakhstan, Indonesia & Duty Free",
   indonesia: "Indonesia",
   japan: "Japan",
 } as const;
@@ -99,7 +99,7 @@ const ILUMA_STICKS: Array<{
   /** Homepage collection preview picks featured items first. */
   featured?: boolean;
 }> = [
-  // Line 1 — multi-origin duty-free line (Uzbekistan, Kyrgyzstan, Kazakhstan, Indonesia & Duty Free)
+  // Line 1 — multi-origin duty-free line (Uzbekistan, Tajikistan, Kazakhstan, Indonesia & Duty Free)
   { flavour: "Amber", profile: "Smooth creamy tobacco with light woody and nutty notes", swatch: "#b45309", origin: "multi", featured: true },
   { flavour: "Silver", profile: "Mild tobacco with subtle herbal notes", swatch: "#9ca3af", origin: "multi" },
   { flavour: "Yellow", profile: "Mellow toasted tobacco with a citrus twist", swatch: "#facc15", origin: "multi" },

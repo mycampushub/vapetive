@@ -4,6 +4,7 @@ import { AgeGate } from "./age-gate";
 import { SiteHeader } from "./site-header";
 import { SiteFooter } from "./site-footer";
 import { BottomNavigation } from "./bottom-navigation";
+import { FloatingWhatsAppButton } from "./floating-whatsapp";
 import { headerNav, mobileNav, footerColumns, legalNav } from "@/server/data";
 
 /**
@@ -34,6 +35,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       <main id="main-content" className="flex-1 pt-16">{children}</main>
       <SiteFooter />
       <BottomNavigation items={mobile} />
+      {/* Conversational ordering CTA — fixed bottom-right, above the mobile nav */}
+      <FloatingWhatsAppButton />
       {/* 18+ gate — appears 5s after landing, remembers confirmed adults (public site only) */}
       <AgeGate />
     </div>
