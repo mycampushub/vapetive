@@ -1,5 +1,6 @@
 import { withApi, fail, ErrorCode } from "@/server/api/guard";
 import { injectWorkerBindings } from "@/server/bindings";
+import { getMediaBlob } from "@/server/repos/media";
 import { NextResponse } from "next/server";
 import path from "node:path";
 
@@ -87,9 +88,29 @@ const handler = withApi({}, async ({ params }) => {
     const bytes = await fsPromises.readFile(filePath);
     return asset(new Uint8Array(bytes), guessMime(key));
   } catch {
+    // Filesystem copy missing (public/uploads is scratch space in the
+    // sandbox — wipes have stranded otherwise-valid media rows). Fall back
+    // to the durable media_blobs copy and re-materialise the file so the
+    // next request takes the fast path again.
+    const blob = await getMediaBlob(key).catch(() => null);
+    if (blob) {
+      void rematerialiseFile(filePath, blob.data).catch(() => undefined);
+      const contentType = MIME_BY_EXT[key.slice(key.lastIndexOf(".")).toLowerCase()] ?? blob.mime ?? "application/octet-stream";
+      return asset(new Uint8Array(blob.data).slice(), contentType);
+    }
     return fail(404, ErrorCode.NOT_FOUND, "Media not found.");
   }
 });
+
+/** Best-effort restore of the filesystem copy from the durable blob. */
+async function rematerialiseFile(filePath: string, data: Uint8Array): Promise<void> {
+  const fsPromises = (
+    process as unknown as { getBuiltinModule?: (id: string) => typeof import("node:fs/promises") }
+  ).getBuiltinModule?.("node:fs/promises");
+  if (!fsPromises) return;
+  await fsPromises.mkdir(filePath.slice(0, filePath.lastIndexOf(path.sep)), { recursive: true });
+  await fsPromises.writeFile(filePath, data);
+}
 
 // Next 16 route-type validation expects the catch-all `params.key: string[]`
 // promise shape; the shared guard types params as a flat string record, so

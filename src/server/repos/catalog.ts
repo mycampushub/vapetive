@@ -104,9 +104,13 @@ async function hydrate(rows: ProductRow[]): Promise<CatalogItem[]> {
       meta: string | null;
       available: number;
       price_delta_cents: number;
+      image_url: string | null;
     }>(
-      `SELECT id, product_id, label, type, swatch, meta, available, price_delta_cents
-       FROM product_variants WHERE product_id IN (${placeholders}) ORDER BY product_id, position`,
+      `SELECT pv.id, pv.product_id, pv.label, pv.type, pv.swatch, pv.meta,
+              pv.available, pv.price_delta_cents, m.url AS image_url
+       FROM product_variants pv
+       LEFT JOIN media_assets m ON m.id = pv.image_media_id
+       WHERE pv.product_id IN (${placeholders}) ORDER BY pv.product_id, pv.position`,
       ids
     ),
     db.all<{ id: string; product_id: string; title: string; label: string; value: string }>(
@@ -148,6 +152,7 @@ async function hydrate(rows: ProductRow[]): Promise<CatalogItem[]> {
       available: v.available === 1,
       meta: v.meta ?? undefined,
       ...(v.price_delta_cents !== 0 ? { priceDelta: filsToAED(v.price_delta_cents) } : {}),
+      ...(v.image_url ? { imageUrl: v.image_url } : {}),
     });
     variantsBy.set(v.product_id, list);
   }
@@ -722,9 +727,12 @@ export async function adminGetProduct(idOrSlug: string): Promise<AdminProductDet
        WHERE pi.product_id = ? ORDER BY pi.position`,
       [row.id]
     ),
-    db.all<{ id: string; label: string; type: string; swatch: string | null; available: number; price_delta_cents: number }>(
-      `SELECT id, label, type, swatch, available, price_delta_cents
-       FROM product_variants WHERE product_id = ? ORDER BY position`,
+    db.all<{ id: string; label: string; type: string; swatch: string | null; available: number; price_delta_cents: number; image_media_id: string | null; image_url: string | null }>(
+      `SELECT pv.id, pv.label, pv.type, pv.swatch, pv.available, pv.price_delta_cents,
+              pv.image_media_id, m.url AS image_url
+       FROM product_variants pv
+       LEFT JOIN media_assets m ON m.id = pv.image_media_id
+       WHERE pv.product_id = ? ORDER BY pv.position`,
       [row.id]
     ),
     db.all<{ id: string; title: string; entry_id: string | null; label: string | null; value: string | null }>(
@@ -755,6 +763,8 @@ export async function adminGetProduct(idOrSlug: string): Promise<AdminProductDet
     swatch: v.swatch,
     available: v.available === 1,
     priceDeltaCents: v.price_delta_cents,
+    imageMediaId: v.image_media_id,
+    imageUrl: v.image_url,
   }));
 
   const groupsBy = new Map<string, AdminProductSpecGroup>();
@@ -924,13 +934,50 @@ export async function adminUpdateProduct(id: string, patch: AdminProductPatch): 
     }
   }
 
-  // Variants: every id must already belong to this product (UPDATE-only).
-  if (patch.variantUpdates && patch.variantUpdates.length > 0) {
+  // Variants: updates/deletes must reference ids that belong to this product;
+  // creates must be colour/origin rows with a valid optional image asset.
+  if (
+    (patch.variantUpdates && patch.variantUpdates.length > 0) ||
+    (patch.variantDeletes && patch.variantDeletes.length > 0)
+  ) {
     const variantRows = await db.all<{ id: string }>(`SELECT id FROM product_variants WHERE product_id = ?`, [row.id]);
     const owned = new Set(variantRows.map((v) => v.id));
-    for (const update of patch.variantUpdates) {
+    for (const update of patch.variantUpdates ?? []) {
       if (!owned.has(update.id)) {
         return failure("validation", "One of the variants no longer belongs to this product — reload and try again.");
+      }
+    }
+    for (const deleteId of patch.variantDeletes ?? []) {
+      if (!owned.has(deleteId)) {
+        return failure("validation", "One of the variants to remove no longer belongs to this product — reload and try again.");
+      }
+    }
+  }
+  const createInputs = patch.variantCreates ?? [];
+  for (const create of createInputs) {
+    if (create.type !== "color" && create.type !== "origin") {
+      return failure("validation", "New variants can only be colours or origins.");
+    }
+    if (!create.label.trim()) {
+      return failure("validation", "Every new colour/origin needs a name.");
+    }
+  }
+  // Attached variant photos must resolve to live media-library assets.
+  const variantMediaIds = [
+    ...createInputs.map((c) => c.imageMediaId).filter((id): id is string => Boolean(id)),
+    ...(patch.variantUpdates ?? []).map((u) => u.imageMediaId).filter((id): id is string => Boolean(id)),
+  ];
+  if (variantMediaIds.length > 0) {
+    const assetIds = [...new Set(variantMediaIds)];
+    for (let i = 0; i < assetIds.length; i += 90) {
+      const chunk = assetIds.slice(i, i + 90);
+      const placeholders = chunk.map(() => "?").join(",");
+      const found = await db.all<{ id: string }>(
+        `SELECT id FROM media_assets WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
+        chunk
+      );
+      if (found.length !== chunk.length) {
+        return failure("validation", "One of the selected variant photos is no longer in the media library — pick it again and save.");
       }
     }
   }
@@ -1024,20 +1071,71 @@ export async function adminUpdateProduct(id: string, patch: AdminProductPatch): 
     });
   }
 
-  // Variant updates — available / price / label only.
+  // Variant deletes — colours/origins are freely editable; cart lines that
+  // referenced a removed option resolve to a blocked line (never a crash).
+  // Variant inventory rows for the removed option are cleaned up too.
+  if (patch.variantDeletes) {
+    for (const deleteId of patch.variantDeletes) {
+      statements.push({
+        sql: `DELETE FROM product_variants WHERE id = ? AND product_id = ?`,
+        params: [deleteId, row.id],
+      });
+      statements.push({
+        sql: `DELETE FROM inventory WHERE product_id = ? AND variant_id = ?`,
+        params: [row.id, deleteId],
+      });
+    }
+  }
+
+  // Variant creates — append colour/origin rows after the current last row
+  // of the same type.
+  if (createInputs.length > 0) {
+    for (const create of createInputs) {
+      const maxRow = await db.get<{ max_pos: number | null }>(
+        `SELECT MAX(position) AS max_pos FROM product_variants WHERE product_id = ? AND type = ?`,
+        [row.id, create.type]
+      );
+      statements.push({
+        sql: `INSERT INTO product_variants
+                (id, product_id, label, type, swatch, meta, image_media_id, available, price_delta_cents, position)
+              VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+        params: [
+          newId("var"),
+          row.id,
+          create.label.trim(),
+          create.type,
+          create.swatch?.trim() || null,
+          create.imageMediaId?.trim() || null,
+          create.available === false ? 0 : 1,
+          create.priceDeltaCents ?? 0,
+          (maxRow?.max_pos ?? -1) + 1,
+        ],
+      });
+    }
+  }
+
+  // Variant updates — availability / price / label / swatch / photo. Column
+  // writes are dynamic: an undefined field keeps its current value.
   if (patch.variantUpdates) {
     for (const update of patch.variantUpdates) {
+      const sets: string[] = ["available = ?", "price_delta_cents = ?"];
+      const params: unknown[] = [update.available ? 1 : 0, update.priceDeltaCents];
       if (update.label !== undefined) {
-        statements.push({
-          sql: `UPDATE product_variants SET available = ?, price_delta_cents = ?, label = ? WHERE id = ? AND product_id = ?`,
-          params: [update.available ? 1 : 0, update.priceDeltaCents, update.label, update.id, row.id],
-        });
-      } else {
-        statements.push({
-          sql: `UPDATE product_variants SET available = ?, price_delta_cents = ? WHERE id = ? AND product_id = ?`,
-          params: [update.available ? 1 : 0, update.priceDeltaCents, update.id, row.id],
-        });
+        sets.push("label = ?");
+        params.push(update.label);
       }
+      if (update.swatch !== undefined) {
+        sets.push("swatch = ?");
+        params.push(update.swatch?.trim() || null);
+      }
+      if (update.imageMediaId !== undefined) {
+        sets.push("image_media_id = ?");
+        params.push(update.imageMediaId?.trim() || null);
+      }
+      statements.push({
+        sql: `UPDATE product_variants SET ${sets.join(", ")} WHERE id = ? AND product_id = ?`,
+        params: [...params, update.id, row.id],
+      });
     }
   }
 

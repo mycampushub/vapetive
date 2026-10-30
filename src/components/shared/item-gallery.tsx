@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ImageOff, ZoomIn } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,11 +10,40 @@ import { cn } from "@/lib/utils";
  * ItemGallery — product image gallery with thumbnails and an
  * accessible zoom dialog (Radix provides focus management; the
  * dialog image is labelled and closable via keyboard).
+ *
+ * `highlightImage` — per-variant photo (colour/origin). When set it is
+ * promoted to the front of the list so the main image and thumbnails
+ * follow the visitor's selection; clearing it restores the catalog order.
  */
-export function ItemGallery({ images, name }: { images: string[]; name: string }) {
+export function ItemGallery({
+  images,
+  name,
+  highlightImage,
+}: {
+  images: string[];
+  name: string;
+  /** Selected variant's photo, when the product defines one. */
+  highlightImage?: string;
+}) {
   const [active, setActive] = useState(0);
   const [failed, setFailed] = useState<Record<number, boolean>>({});
-  const safeImages = images.length > 0 ? images : ["/products/placeholder-missing.jpg"];
+
+  // Selection swaps: jump to the promoted photo (and reset stale failures).
+  // Render-time state adjustment — the sanctioned alternative to a setState
+  // effect, which would cascade renders.
+  const [prevHighlight, setPrevHighlight] = useState(highlightImage);
+  if (prevHighlight !== highlightImage) {
+    setPrevHighlight(highlightImage);
+    setActive(0);
+    setFailed({});
+  }
+
+  const safeImages = useMemo(() => {
+    const base = images.length > 0 ? images : ["/products/placeholder-missing.jpg"];
+    if (!highlightImage) return base;
+    return [highlightImage, ...base.filter((img) => img !== highlightImage)];
+  }, [images, highlightImage]);
+
   const current = safeImages[Math.min(active, safeImages.length - 1)];
 
   return (
@@ -28,6 +57,7 @@ export function ItemGallery({ images, name }: { images: string[]; name: string }
           >
             {!failed[active] ? (
               <Image
+                key={current}
                 src={current}
                 alt={`${name} — image ${active + 1} of ${safeImages.length}`}
                 fill
@@ -54,7 +84,7 @@ export function ItemGallery({ images, name }: { images: string[]; name: string }
             <Dialog.Title className="sr-only">{`${name} — zoomed image`}</Dialog.Title>
             <div className="relative aspect-square w-full max-w-2xl overflow-hidden rounded-3xl border border-line-strong bg-elevated">
               {!failed[active] ? (
-                <Image src={current} alt={`${name} — zoomed view`} fill sizes="(max-width: 768px) 100vw, 672px" className="object-cover" onError={() => setFailed((f) => ({ ...f, [active]: true }))} />
+                <Image key={`zoom-${current}`} src={current} alt={`${name} — zoomed view`} fill sizes="(max-width: 768px) 100vw, 672px" className="object-cover" onError={() => setFailed((f) => ({ ...f, [active]: true }))} />
               ) : (
                 <span className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
                   <ImageOff className="size-8" aria-hidden="true" />

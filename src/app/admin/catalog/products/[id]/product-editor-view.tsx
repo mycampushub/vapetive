@@ -12,6 +12,7 @@ import {
   Plus,
   Save,
   Trash2,
+  X,
 } from "lucide-react";
 import { adminService } from "@/services/admin";
 import { catalogService } from "@/services/catalog";
@@ -32,6 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { FormField, Select, TextArea, TextInput } from "@/components/forms/fields";
+import { COUNTRIES } from "@/data/countries";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type {
@@ -65,12 +67,16 @@ const AVAILABILITY_OPTIONS: Array<{ value: Availability; label: string }> = [
 
 /** Editor working state — variants carry a raw delta input for smooth typing. */
 interface VariantRow {
+  /** DB id, or a `new_` prefix for rows created in this session (not yet saved). */
   id: string;
   label: string;
   type: AdminProductDetail["variants"][number]["type"];
   swatch: string | null;
   available: boolean;
   deltaInput: string;
+  /** Per-variant gallery photo (colour/origin imagery). */
+  imageMediaId: string | null;
+  imageUrl: string | null;
 }
 
 interface EditorState {
@@ -96,6 +102,8 @@ interface EditorState {
   specGroups: AdminProductSpecGroup[];
   documents: AdminProductDocument[];
   variants: VariantRow[];
+  /** Persisted variant ids removed in this session (sent as variantDeletes). */
+  deletedVariantIds: string[];
 }
 
 function toCents(input: string): number | null {
@@ -134,7 +142,10 @@ function buildState(detail: AdminProductDetail): EditorState {
       swatch: v.swatch,
       available: v.available,
       deltaInput: String(v.priceDeltaCents / 100),
+      imageMediaId: v.imageMediaId,
+      imageUrl: v.imageUrl,
     })),
+    deletedVariantIds: [],
   };
 }
 
@@ -235,6 +246,16 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
         return null;
       }
     }
+    // New colour/origin rows must be named before they can be persisted.
+    const unnamedDraft = state.variants.find((v) => v.id.startsWith("new_") && v.label.trim() === "");
+    if (unnamedDraft) {
+      toast({
+        variant: "destructive",
+        title: "Name every new variant",
+        description: `A new ${unnamedDraft.type === "color" ? "colour" : "origin"} is still unnamed — give it a label or remove the row.`,
+      });
+      return null;
+    }
 
     return {
       name: state.name.trim(),
@@ -271,14 +292,42 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
         href: d.href?.trim() || null,
         note: d.note?.trim() || null,
       })),
-      variantUpdates: state.variants.map((v) => ({
-        id: v.id,
-        available: v.available,
-        priceDeltaCents:
-          v.deltaInput.trim() === ""
-            ? (detail.variants.find((dv) => dv.id === v.id)?.priceDeltaCents ?? 0)
-            : (toCents(v.deltaInput) ?? 0),
-      })),
+      variantUpdates: state.variants
+        .filter((v) => !v.id.startsWith("new_"))
+        .map((v) => {
+          const original = detail.variants.find((dv) => dv.id === v.id);
+          const update: NonNullable<AdminProductPatch["variantUpdates"]>[number] = {
+            id: v.id,
+            available: v.available,
+            priceDeltaCents:
+              v.deltaInput.trim() === ""
+                ? (original?.priceDeltaCents ?? 0)
+                : (toCents(v.deltaInput) ?? 0),
+          };
+          // Swatch/label/photo writes are colour/origin-only — flavour and
+          // option rows keep their stored values (their ids live in carts).
+          if (v.type === "color" && v.swatch !== (original?.swatch ?? null)) {
+            update.swatch = v.swatch;
+          }
+          if ((v.type === "color" || v.type === "origin") && v.label !== (original?.label ?? v.label)) {
+            update.label = v.label.trim() || v.label;
+          }
+          if (v.imageMediaId !== (original?.imageMediaId ?? null)) {
+            update.imageMediaId = v.imageMediaId;
+          }
+          return update;
+        }),
+      variantCreates: state.variants
+        .filter((v) => v.id.startsWith("new_"))
+        .map((v) => ({
+          type: v.type as "color" | "origin",
+          label: v.label.trim(),
+          swatch: v.type === "color" ? v.swatch : null,
+          available: v.available,
+          priceDeltaCents: v.deltaInput.trim() === "" ? 0 : (toCents(v.deltaInput) ?? 0),
+          imageMediaId: v.imageMediaId,
+        })),
+      variantDeletes: state.deletedVariantIds.length > 0 ? state.deletedVariantIds : undefined,
       categoryId: state.categoryId,
       brandId: state.brandId,
       publish: state.status === "published",
@@ -306,6 +355,11 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
         title: "Product saved",
         description: `${state.name.trim()} persisted to the catalog — storefront pages and search update immediately.`,
       });
+      // New colour/origin rows receive server ids on save — refresh the RSC
+      // payload so the editor state (and the tab count) reflects them.
+      if ((patchBody.variantCreates?.length ?? 0) > 0 || (patchBody.variantDeletes?.length ?? 0) > 0) {
+        router.refresh();
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Please try again.";
       if (message.toLowerCase().includes("reload")) {
@@ -396,7 +450,164 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
   const patchVariant = (id: string, p: Partial<VariantRow>) =>
     patch({ variants: state.variants.map((v) => (v.id === id ? { ...v, ...p } : v)) });
 
+  /* --------------------- colour/origin variant editing --------------------- */
+
+  const draftCounter = useRef(0);
+  const addVariantRow = (type: "color" | "origin") => {
+    draftCounter.current += 1;
+    patch({
+      variants: [
+        ...state.variants,
+        {
+          id: `new_${Date.now().toString(36)}_${draftCounter.current}`,
+          label: "",
+          type,
+          swatch: type === "color" ? "#7c3aed" : null,
+          available: true,
+          deltaInput: "",
+          imageMediaId: null,
+          imageUrl: null,
+        },
+      ],
+    });
+  };
+  const removeVariantRow = (row: VariantRow) => {
+    const rest = state.variants.filter((v) => v.id !== row.id);
+    if (row.id.startsWith("new_")) {
+      patch({ variants: rest });
+      return;
+    }
+    patch({ variants: rest, deletedVariantIds: [...state.deletedVariantIds, row.id] });
+  };
+
+  // MediaPicker target: which variant row is currently choosing a photo.
+  const [variantImagePickerId, setVariantImagePickerId] = useState<string | null>(null);
+
   const [thumbsBroken, setThumbsBroken] = useState<Set<string>>(() => new Set());
+
+  const lockedVariants = state.variants.filter(
+    (v) => v.type === "flavor" || v.type === "capacity" || v.type === "nicotine"
+  );
+  const colorVariants = state.variants.filter((v) => v.type === "color");
+  const originVariants = state.variants.filter((v) => v.type === "origin");
+
+  /** Shared card for editable colour/origin rows: swatch, name, delta,
+   *  availability, photo and removal. Draft rows (new_) highlight until saved. */
+  const renderEditableVariant = (variant: VariantRow) => {
+    const isDraft = variant.id.startsWith("new_");
+    const kind = variant.type === "color" ? "colour" : "origin";
+    const thumbBroken = thumbsBroken.has(`${variant.id}-img`);
+    return (
+      <div
+        key={variant.id}
+        className={cn(
+          "space-y-3 rounded-xl border bg-foreground/[0.02] p-3",
+          isDraft ? "border-violet-glow/40" : "border-line",
+          !variant.available && "opacity-70"
+        )}
+      >
+        <div className="grid grid-cols-1 items-end gap-2.5 sm:grid-cols-[auto_minmax(0,1fr)_9rem_auto]">
+          {variant.type === "color" && (
+            <div className="space-y-1">
+              <label htmlFor={`${variant.id}-swatch`} className="block text-[0.72rem] font-medium text-muted-foreground">
+                Swatch
+              </label>
+              <input
+                id={`${variant.id}-swatch`}
+                type="color"
+                value={variant.swatch ?? "#7c3aed"}
+                onChange={(e) => patchVariant(variant.id, { swatch: e.target.value })}
+                className="block h-10 w-14 cursor-pointer rounded-lg border border-line bg-transparent p-1"
+                aria-label={`Swatch colour for ${variant.label || "new colour"}`}
+              />
+            </div>
+          )}
+          <FormField label={isDraft ? `New ${kind} name` : kind === "colour" ? "Colour name" : "Origin name"} htmlFor={`${variant.id}-label`}>
+            <TextInput
+              id={`${variant.id}-label`}
+              value={variant.label}
+              onChange={(e) => patchVariant(variant.id, { label: e.target.value })}
+              maxLength={120}
+              placeholder={variant.type === "color" ? "e.g. Midnight Blue" : "e.g. Indonesia"}
+              list={variant.type === "origin" ? "vap-origin-countries" : undefined}
+            />
+          </FormField>
+          <FormField label="Price delta (AED)" htmlFor={`${variant.id}-delta`}>
+            <TextInput
+              id={`${variant.id}-delta`}
+              type="number"
+              step="0.01"
+              value={variant.deltaInput}
+              onChange={(e) => patchVariant(variant.id, { deltaInput: e.target.value })}
+            />
+          </FormField>
+          <div className="flex h-11 items-center gap-2">
+            <Switch
+              checked={variant.available}
+              onCheckedChange={(v) => patchVariant(variant.id, { available: v })}
+              aria-label={`Availability for ${variant.label || "new variant"}`}
+            />
+            <span className="text-[0.76rem] text-muted-foreground">{variant.available ? "Available" : "Hidden"}</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-line bg-black/30">
+            {variant.imageUrl && !thumbBroken ? (
+              <img
+                src={variant.imageUrl}
+                alt=""
+                className="h-full w-full object-cover"
+                onError={() =>
+                  setThumbsBroken((prev) => {
+                    if (prev.has(`${variant.id}-img`)) return prev;
+                    const next = new Set(prev);
+                    next.add(`${variant.id}-img`);
+                    return next;
+                  })
+                }
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-muted-foreground">
+                <ImagePlus className="size-4" aria-hidden="true" />
+              </span>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[0.8rem] font-medium text-foreground">Variant photo</p>
+            <p className="text-[0.72rem] text-muted-foreground">Shown in the storefront gallery when this {kind} is selected.</p>
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setVariantImagePickerId(variant.id)}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3 text-[0.76rem] font-medium text-muted-foreground transition-colors hover:border-violet-glow/50 hover:text-foreground"
+            >
+              <ImagePlus className="size-3.5" aria-hidden="true" />
+              {variant.imageUrl ? "Change photo" : "Choose photo"}
+            </button>
+            {variant.imageUrl && (
+              <button
+                type="button"
+                onClick={() => patchVariant(variant.id, { imageMediaId: null, imageUrl: null })}
+                aria-label={`Remove photo from ${variant.label || "new variant"}`}
+                className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => removeVariantRow(variant)}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3 text-[0.76rem] font-medium text-muted-foreground transition-colors hover:border-error/50 hover:text-error"
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+              {isDraft ? `Discard ${kind}` : `Remove ${kind}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const categoryLabel = useMemo(
     () => categories.find((c) => c.id === state.categoryId)?.name ?? detail.categoryName,
@@ -515,18 +726,20 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
           </TabsContent>
 
           {/* Variants */}
-          <TabsContent value="variants" className="mt-4">
+          <TabsContent value="variants" className="mt-4 space-y-4">
+            {/* Locked groups — flavour/capacity/nicotine rows are referenced by
+                carts and orders, so they stay UPDATE-only. */}
             <FormSection
-              title="Variants (updates only)"
-              description="Carts and orders reference variant ids, so rows cannot be added or removed here — toggle availability and adjust the price delta, then save."
+              title="Flavours & options (updates only)"
+              description="Carts and orders reference these variant ids, so rows cannot be added or removed here — toggle availability and adjust the price delta, then save."
             >
               <div className="space-y-2.5">
-                {state.variants.length === 0 && (
+                {lockedVariants.length === 0 && (
                   <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-[0.84rem] text-muted-foreground">
-                    This product has no variants.
+                    This product has no flavour, option or nicotine variants.
                   </p>
                 )}
-                {state.variants.map((variant) => (
+                {lockedVariants.map((variant) => (
                   <div
                     key={variant.id}
                     className={cn(
@@ -575,6 +788,77 @@ export function ProductEditorView({ detail }: { detail: AdminProductDetail }) {
                 ))}
               </div>
             </FormSection>
+
+            {/* Colours — full add/edit/delete with swatch + per-colour photo. */}
+            <FormSection
+              title="Colours"
+              description="Add as many colours as the product ships in. Each colour can carry its own photo — the storefront gallery swaps to it when the colour is selected."
+              actions={
+                <button
+                  type="button"
+                  onClick={() => addVariantRow("color")}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-[0.8rem] font-medium text-muted-foreground transition-colors hover:border-violet-glow/50 hover:text-foreground"
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Add colour
+                </button>
+              }
+            >
+              <div className="space-y-2.5">
+                {colorVariants.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-[0.84rem] text-muted-foreground">
+                    No colours yet — add one for every finish this product comes in.
+                  </p>
+                )}
+                {colorVariants.map(renderEditableVariant)}
+              </div>
+            </FormSection>
+
+            {/* Origins — selectable countries of manufacture with photos. */}
+            <FormSection
+              title="Origins"
+              description="Where this product is manufactured. Add one origin per country of manufacture — visitors pick an origin and the gallery shows its photo."
+              actions={
+                <button
+                  type="button"
+                  onClick={() => addVariantRow("origin")}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-[0.8rem] font-medium text-muted-foreground transition-colors hover:border-violet-glow/50 hover:text-foreground"
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Add origin
+                </button>
+              }
+            >
+              <div className="space-y-2.5">
+                {originVariants.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-[0.84rem] text-muted-foreground">
+                    No selectable origins yet — the free-text origin on the Details tab still displays until you add one here.
+                  </p>
+                )}
+                {originVariants.map(renderEditableVariant)}
+              </div>
+              {/* Country suggestions for origin names — free text still accepted. */}
+              <datalist id="vap-origin-countries">
+                {COUNTRIES.map((country) => (
+                  <option key={country} value={country} />
+                ))}
+              </datalist>
+            </FormSection>
+
+            {/* Shared media picker — one instance serves every variant row. */}
+            <MediaPicker
+              open={variantImagePickerId !== null}
+              onOpenChange={(open) => {
+                if (!open) setVariantImagePickerId(null);
+              }}
+              onSelect={(asset) => {
+                if (variantImagePickerId) {
+                  patchVariant(variantImagePickerId, { imageMediaId: asset.mediaAssetId, imageUrl: asset.url });
+                }
+              }}
+              title="Variant photo"
+              uploadFolder="products"
+            />
           </TabsContent>
 
           {/* Specifications */}

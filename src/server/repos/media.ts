@@ -86,33 +86,71 @@ export interface CreateMediaInput {
   url: string;
   uploadedBy?: string | null;
   status?: "ready" | "processing" | "failed";
+  /**
+   * Raw bytes persisted alongside the metadata row. Local sandbox uploads
+   * MUST pass these: public/uploads is scratch space (files disappear
+   * between sessions while media_assets rows survive), so the blob copy is
+   * what keeps uploaded images servable. On Workers the R2 object is the
+   * durable copy — callers there omit this field.
+   */
+  bytes?: Uint8Array;
 }
 
 export async function createMedia(input: CreateMediaInput): Promise<string> {
   const db = await getDb();
   const id = newId("med");
-  await db.run(
-    `INSERT INTO media_assets
-      (id, filename, folder, type, mime, size_bytes, width, height, alt, status, r2_key, url, uploaded_by, uploaded_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      input.filename,
-      input.folder,
-      input.type,
-      input.mime,
-      input.sizeBytes,
-      input.width ?? null,
-      input.height ?? null,
-      input.alt ?? null,
-      input.status ?? "ready",
-      input.r2Key,
-      input.url,
-      input.uploadedBy ?? null,
-      new Date().toISOString(),
-    ]
-  );
+  const statements: Array<{ sql: string; params?: unknown[] }> = [
+    {
+      sql: `INSERT INTO media_assets
+          (id, filename, folder, type, mime, size_bytes, width, height, alt, status, r2_key, url, uploaded_by, uploaded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
+        id,
+        input.filename,
+        input.folder,
+        input.type,
+        input.mime,
+        input.sizeBytes,
+        input.width ?? null,
+        input.height ?? null,
+        input.alt ?? null,
+        input.status ?? "ready",
+        input.r2Key,
+        input.url,
+        input.uploadedBy ?? null,
+        new Date().toISOString(),
+      ],
+    },
+  ];
+  if (input.bytes && input.bytes.byteLength > 0) {
+    statements.push({
+      sql: `INSERT INTO media_blobs (media_asset_id, data) VALUES (?, ?)`,
+      params: [id, input.bytes],
+    });
+  }
+  await db.batch(statements);
   return id;
+}
+
+/**
+ * Durable blob lookup for the public media route: resolves the bytes for a
+ * local upload key even when the public/uploads copy has been wiped. Also
+ * returns the stored mime so the response is byte-for-byte right.
+ */
+export async function getMediaBlob(key: string): Promise<{ data: Uint8Array; mime: string } | null> {
+  const db = await getDb();
+  const row = await db.get<{ data: Uint8Array | ArrayBuffer | number[]; mime: string }>(
+    `SELECT b.data, m.mime
+     FROM media_blobs b
+     JOIN media_assets m ON m.id = b.media_asset_id
+     WHERE m.deleted_at IS NULL AND (m.r2_key = ? OR m.url = ?)
+     LIMIT 1`,
+    [`local:${key}`, `/uploads/${key}`]
+  );
+  if (!row) return null;
+  const raw = row.data as Uint8Array | ArrayBuffer | number[];
+  const bytes = raw instanceof Uint8Array ? raw : raw instanceof ArrayBuffer ? new Uint8Array(raw) : Uint8Array.from(raw);
+  return { data: bytes, mime: row.mime };
 }
 
 export async function softDeleteMedia(id: string): Promise<boolean> {

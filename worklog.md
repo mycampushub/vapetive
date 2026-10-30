@@ -1256,3 +1256,24 @@ Stage Summary:
 - All admin detail functionalities verified working: products create→editor, orders status transitions, tickets notes+replies, customers suspend flow, users create, media library, settings save/persist (KV revisioned).
 - Files changed: src/app/admin/catalog/brands/brands-view.tsx, src/app/admin/catalog/categories/categories-view.tsx (only 2 files; backend untouched). DB returned to seed state (QA rows deleted; brands=['iqos-iluma'], categories=['heat-not-burn']).
 - UNCOMMITTED: those 2 view files + all prior Task 47–49 changes — include in next push.
+---
+Task ID: 51
+Agent: main (orchestrator)
+Task: User request — confirm variant/origin/image-swap work, reduce country list to 5 markets, fix visitor-side "Image unavailable", and provide a data-safe D1 push path.
+
+Work Log:
+- Verified previous-session state: migration 0004 (variant rebuild with origin type + image_media_id, media_blobs) applied locally; countries list already reduced to Uzbekistan/Kyrgyzstan/Tajikistan/Indonesia/Japan (src/data/countries.ts, datalist only — free text still allows new countries); admin editor + storefront swap code complete.
+- E2E visitor test (tool-results/e2e-upload-visitor.mjs): admin sign-in → sharp-generated PNG → POST /api/v1/admin/media → PATCH product images → FRESH cookie-less browser on /products/iqos-iluma-amber → main image loads via /_next/image → /uploads rewrite → /api/v1/media (naturalWidth > 0, zero "Image unavailable", zero failed image requests); thumbnail click loads the upload at w=3840. PASS. Reverted (images restored, test media deleted).
+- Storefront swap re-verified (scripts/variant-swap-e2e.mjs): default pack → Crimson → uploaded photo → Midnight Blue → pack → Japan → device → Indonesia → duo; 375px overflow 0px.
+- Admin editor browser check (tool-results/verify-admin-editor.mjs + check2): Variants tab shows Colours (Midnight Blue, Crimson w/ photo thumbs) + Origins (Indonesia, Japan) + Add colour/Add origin buttons + locked flavour section + MediaPicker "Choose photo"; origin inputs bound to vap-origin-countries datalist containing EXACTLY the 5 allowed countries. Zero pageerrors.
+- Data hygiene: removed leftover "Vietnam" test origin variant (var_mvuo61ij…, + its inventory row) from the Amber product via direct SQLite.
+- New script scripts/media-sync-remote.ts: pushes locally-stored media bytes (media_blobs → fallback public/uploads) to R2 vapetive-media under the key the public route reads (<folder>/<filename>); --dry-run/--force; idempotent (skips objects already in R2); typed node:child_process (no Bun globals). Dry-run OK.
+- Verified 0004 remote-compatibility against 0001 schema: INSERT…SELECT copies id/product_id/label/type/swatch/meta/available/price_delta_cents/position exactly; old type values all satisfy the new CHECK; media_blobs CREATE IF NOT EXISTS. Data-preserving rebuild, no DELETE/UPDATE of user rows.
+- bun run lint + typecheck clean; dev.log clean.
+
+Stage Summary:
+- Visitor-side "Image unavailable" is FIXED in code (media_blobs durability + rematerialise + /uploads→/api/v1/media rewrite); proven by fresh-visitor E2E.
+- Multi colour/origin variants with per-variant photos work end-to-end (admin editor → PATCH → storefront swap).
+- Countries datalist = 5 markets; adding a country = append to src/data/countries.ts + deploy (pure code, zero DB risk).
+- Production push recipe (data-safe): 1) backup: bunx wrangler d1 export DB --remote --output backup.sql; 2) bun run db:migrate:remote (applies ONLY pending 0004; preserves all rows); 3) bun scripts/media-sync-remote.ts (local uploads → R2); 4) bun run cf:deploy (code). DO NOT run db:seed:export/db:seed:remote against the live store — it RESETS seed-managed content.
+- UNCOMMITTED: scripts/media-sync-remote.ts (+ all prior Task 47–50 changes).

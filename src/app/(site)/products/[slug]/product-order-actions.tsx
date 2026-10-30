@@ -14,13 +14,27 @@ import { formatAED, cn } from "@/lib/utils";
  * ProductOrderActions — the ordering island for the product page.
  * Owns the variant selection (passed down to the controlled
  * VariantPicker) and the Add to cart / Buy now actions.
- * Uses the in-memory cart store; blocked products or
- * variants disable ordering with an explanatory label.
+ * Selection can be lifted into ProductDetailShell (controlled props) so
+ * the gallery can swap to the selected colour/origin photo.
  */
-export function ProductOrderActions({ item }: { item: CatalogItem }) {
+export function ProductOrderActions({
+  item,
+  selection: controlledSelection,
+  onSelectionChange,
+}: {
+  item: CatalogItem;
+  /** Controlled selection (owned by ProductDetailShell) — enables the
+   *  image-swap behaviour in the gallery. */
+  selection?: VariantSelection;
+  onSelectionChange?: (next: VariantSelection, changedType?: string) => void;
+}) {
   const router = useRouter();
   const { toast } = useToast();
-  const [selection, setSelection] = useState<VariantSelection>(() => initialVariantSelection(item.variants));
+  const [internalSelection, setInternalSelection] = useState<VariantSelection>(() =>
+    initialVariantSelection(item.variants)
+  );
+  const selection = controlledSelection ?? internalSelection;
+  const setSelection = onSelectionChange ?? setInternalSelection;
 
   const selectedVariant = useMemo(() => {
     const id = primaryVariantId(selection);
@@ -31,6 +45,11 @@ export function ProductOrderActions({ item }: { item: CatalogItem }) {
   const variantBlocked = selectedVariant ? !selectedVariant.available : false;
   const canOrder = !productBlocked && !variantBlocked;
   const displayName = selectedVariant ? `${item.name} — ${selectedVariant.label}` : item.name;
+
+  // Legacy static origin text applies only while the product has no
+  // selectable origin variants (they render as their own group instead).
+  const hasOriginVariants = item.variants.some((v) => v.type === "origin");
+  const staticOrigin = hasOriginVariants ? undefined : item.origin;
 
   const addToCart = () => {
     if (!canOrder) return;
@@ -50,7 +69,7 @@ export function ProductOrderActions({ item }: { item: CatalogItem }) {
 
   return (
     <>
-      <VariantPicker variants={item.variants} value={selection} onChange={setSelection} origin={item.origin} />
+      <VariantPicker variants={item.variants} value={selection} onChange={setSelection} origin={staticOrigin} />
 
       <div className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row">

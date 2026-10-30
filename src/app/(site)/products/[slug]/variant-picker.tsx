@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 const GROUP_ORDER: Array<{ type: ItemVariant["type"]; label: string }> = [
   { type: "flavor", label: "Flavour" },
   { type: "color", label: "Colour" },
+  { type: "origin", label: "Origin" },
   { type: "capacity", label: "Option" },
   { type: "nicotine", label: "Nicotine strength" },
 ];
@@ -28,7 +29,7 @@ export function initialVariantSelection(variants: ItemVariant[]): VariantSelecti
 
 /**
  * The cart line's variant: the first selected group in GROUP_ORDER
- * (flavour beats colour beats capacity beats nicotine).
+ * (flavour beats colour beats origin beats capacity beats nicotine).
  */
 export function primaryVariantId(selection: VariantSelection): string | null {
   for (const { type } of GROUP_ORDER) {
@@ -52,10 +53,12 @@ export function VariantPicker({
 }: {
   variants: ItemVariant[];
   value: VariantSelection;
-  onChange: (next: VariantSelection) => void;
-  /** Product origin (country/line of manufacture) — rendered as its own
-   *  "Origin" group right after Flavour: label in the legend, value as a
-   *  selected-style pill below (mirrors the Flavour group exactly). */
+  /** `changedType` is the group whose pill was clicked — re-clicking a
+   *  selected colour/origin re-applies its photo (idempotent highlight). */
+  onChange: (next: VariantSelection, changedType?: ItemVariant["type"]) => void;
+  /** Static product origin (products.origin text) — displayed as a read-only
+   *  pill beside Flavour ONLY while the product has no selectable origin
+   *  variants; once origins exist they render as their own group below. */
   origin?: string;
 }) {
   const groups = useMemo(
@@ -86,7 +89,7 @@ export function VariantPicker({
               name={`variant-${group.type}`}
               label={group.label}
               value={value[group.type] ?? ""}
-              onChange={(next) => onChange({ ...value, [group.type]: next })}
+              onChange={(next) => onChange({ ...value, [group.type]: next }, group.type)}
               options={group.options.map((v) => ({
                 value: v.id,
                 label: v.label,
@@ -97,7 +100,9 @@ export function VariantPicker({
         }
 
         const hasUnavailable = group.options.some((v) => !v.available);
-        const showOrigin = group.type === "flavor" && Boolean(origin);
+        // Legacy display: the free-text origin shares Flavour's grid row and
+        // only applies while no selectable origin variants exist.
+        const showOrigin = group.type === "flavor" && Boolean(origin) && !groups.some((g) => g.type === "origin");
         return (
           <div
             key={group.type}
@@ -125,7 +130,7 @@ export function VariantPicker({
                         ? variant.label
                         : `${variant.label} — ${variant.meta ?? "currently unavailable"}`
                     }
-                    onClick={() => onChange({ ...value, [group.type]: variant.id })}
+                    onClick={() => onChange({ ...value, [group.type]: variant.id }, group.type)}
                     className={cn(
                       "inline-flex min-h-10 items-center gap-2.5 rounded-full border px-4 text-[0.82rem] font-medium transition-colors",
                       isSelected
@@ -141,6 +146,9 @@ export function VariantPicker({
                         style={{ backgroundColor: variant.swatch }}
                       />
                     )}
+                    {group.type === "origin" && (
+                      <Globe className="size-3.5 shrink-0 text-violet-soft" aria-hidden="true" />
+                    )}
                     {variant.label}
                   </button>
                 );
@@ -151,9 +159,8 @@ export function VariantPicker({
             )}
             </fieldset>
 
-            {/* Origin — mirrors the Flavour group (same legend style, value as a
-                selected-style pill below; static attribute, so a span not a button).
-                Shares the grid row with Flavour on sm+; stacks beneath on mobile. */}
+            {/* Static origin — legacy free-text origin (Details tab) mirrors
+                the Flavour group while the product has no origin variants. */}
             {showOrigin && (
               <fieldset className="space-y-2.5">
                 <legend className="text-[0.82rem] font-medium text-foreground">Origin</legend>

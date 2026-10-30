@@ -83,10 +83,36 @@ const patchSchema = z.object({
         available: z.boolean(),
         priceDeltaCents: z.number().int().min(-10_000_000).max(10_000_000),
         label: z.string().trim().min(1).max(120).optional(),
+        swatch: z
+          .string()
+          .trim()
+          .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/, "Swatch must be a hex colour")
+          .nullable()
+          .optional(),
+        imageMediaId: z.string().trim().min(1).max(120).nullable().optional(),
       })
     )
     .max(40)
     .optional(),
+  variantCreates: z
+    .array(
+      z.object({
+        type: z.enum(["color", "origin"]),
+        label: z.string().trim().min(1).max(120),
+        swatch: z
+          .string()
+          .trim()
+          .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/, "Swatch must be a hex colour")
+          .nullable()
+          .optional(),
+        available: z.boolean().optional(),
+        priceDeltaCents: z.number().int().min(-10_000_000).max(10_000_000).optional(),
+        imageMediaId: z.string().trim().min(1).max(120).nullable().optional(),
+      })
+    )
+    .max(40)
+    .optional(),
+  variantDeletes: z.array(z.string().min(1)).max(40).optional(),
   restockQty: z.number().int().min(0).max(999_999).optional(),
   setOutOfStock: z.boolean().optional(),
   clearOutOfStock: z.boolean().optional(),
@@ -140,6 +166,8 @@ export const PATCH = withApi(
       specGroups: body.specGroups,
       documents: body.documents,
       variantUpdates: body.variantUpdates,
+      variantCreates: body.variantCreates,
+      variantDeletes: body.variantDeletes,
       restockQty: body.restockQty,
       setOutOfStock: body.setOutOfStock,
       clearOutOfStock: body.clearOutOfStock,
@@ -163,7 +191,10 @@ export const PATCH = withApi(
       action: "product.update",
       targetType: "prd",
       targetId: params.id,
-      detail: "Updated product catalog record",
+      detail:
+        (body.variantCreates?.length ?? 0) > 0 || (body.variantDeletes?.length ?? 0) > 0
+          ? `Updated product catalog record (+${body.variantCreates?.length ?? 0} variants, -${body.variantDeletes?.length ?? 0} removed)`
+          : "Updated product catalog record",
       before: { expectedVersion: body.expectedVersion ?? null },
       after: { keys: Object.keys(patch) },
       ip: meta.ip,

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/layout/breadcrumbs";
-import { ItemGallery } from "@/components/shared/item-gallery";
 import { InformationAccordion, type AccordionPanel } from "@/components/shared/information-accordion";
 import { SpecificationList } from "@/components/shared/specification-list";
 import { AvailabilityBadge } from "@/components/shared/status-badge";
@@ -11,7 +10,7 @@ import { ItemGrid } from "@/components/shared/item-grid";
 import { getBrands, getCategoryBySlugRepo, getProductBySlug, getProducts } from "@/server/data";
 import { formatAED } from "@/lib/utils";
 import { breadcrumbJsonLd, canonical, faqJsonLd, JsonLd, productJsonLd } from "@/lib/seo";
-import { ProductOrderActions } from "./product-order-actions";
+import { ProductDetailShell } from "./product-detail-shell";
 import { ProductSaveButton } from "./product-save-button";
 
 interface ProductPageProps {
@@ -113,16 +112,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <Breadcrumbs items={crumbs} />
         </div>
 
-        <div className="grid gap-10 pt-8 lg:grid-cols-2">
-          {/* Gallery */}
-          <div>
-            <ItemGallery images={item.images} name={item.name} />
-          </div>
-
-          {/* Info column */}
-          <div className="flex flex-col gap-5">
-            {/* Brand chip — a real link when the brand resolves in the
-                directory; an inert label otherwise (never href="#"). */}
+        <ProductDetailShell item={item}>
+          {/* Brand chip — a real link when the brand resolves in the
+              directory; an inert label otherwise (never href="#"). */}
             {brand ? (
               <Link
                 href={`/brand/${brand.slug}`}
@@ -205,10 +197,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               )}
               <ProductSaveButton itemId={item.id} name={item.name} />
             </div>
-
-            <ProductOrderActions item={item} />
-          </div>
-        </div>
+        </ProductDetailShell>
 
         {/* Product details */}
         <section id="product-details" aria-labelledby="product-details-heading" className="scroll-mt-24 pt-16">

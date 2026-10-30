@@ -62,12 +62,15 @@ export interface SpecificationGroup {
 export interface ItemVariant {
   id: string;
   label: string;
-  type: "flavor" | "color" | "capacity" | "nicotine";
+  type: "flavor" | "color" | "origin" | "capacity" | "nicotine";
   swatch?: string;
   available: boolean;
   meta?: string;
   /** Price delta vs the base product price, in AED (fils-derived). */
   priceDelta?: number;
+  /** Per-variant gallery photo — selecting this variant on the product
+   *  page swaps the main image (colour/origin photography). */
+  imageUrl?: string;
 }
 
 export interface ConformityInfo {
@@ -167,6 +170,9 @@ export interface AdminProductVariant {
   swatch: string | null;
   available: boolean;
   priceDeltaCents: number;
+  /** Attached gallery photo (colour/origin imagery) — null when unset. */
+  imageMediaId: string | null;
+  imageUrl: string | null;
 }
 
 export interface AdminProductSpecEntry {
@@ -238,8 +244,11 @@ export interface AdminProductListResult {
 
 /**
  * Full editor patch — replace-all semantics for child collections
- * (images / specGroups / documents), UPDATE-only for variants (carts
- * reference variant ids), column writes for the rest.
+ * (images / specGroups / documents), UPDATE-only for flavour/capacity/
+ * nicotine variants (carts reference their ids), full add/edit/delete for
+ * colour and origin variants (safe — cart lines referencing a removed
+ * option degrade to a blocked line, never a crash), column writes for the
+ * rest.
  */
 export interface AdminProductPatch {
   name?: string;
@@ -259,7 +268,25 @@ export interface AdminProductPatch {
   images?: AdminProductImage[];
   specGroups?: AdminProductSpecGroup[];
   documents?: AdminProductDocument[];
-  variantUpdates?: Array<{ id: string; label?: string; available?: boolean; priceDeltaCents?: number }>;
+  variantUpdates?: Array<{
+    id: string;
+    label?: string;
+    available?: boolean;
+    priceDeltaCents?: number;
+    swatch?: string | null;
+    imageMediaId?: string | null;
+  }>;
+  /** New colour/origin variants to append (colour may carry a swatch hex). */
+  variantCreates?: Array<{
+    type: "color" | "origin";
+    label: string;
+    swatch?: string | null;
+    available?: boolean;
+    priceDeltaCents?: number;
+    imageMediaId?: string | null;
+  }>;
+  /** Variant ids to remove (must belong to this product). */
+  variantDeletes?: string[];
   restockQty?: number;
   setOutOfStock?: boolean;
   clearOutOfStock?: boolean;

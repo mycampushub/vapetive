@@ -68,7 +68,7 @@ export const ItemCard = memo(function ItemCard({ item, priority = false }: { ite
           aria-label={`${item.brand} ${item.name} — view product information`}
         >
           <div className="relative aspect-square w-full overflow-hidden rounded-t-2xl bg-gradient-to-b from-white/[0.045] to-transparent">
-            {!imgFailed ? (
+            {!imgFailed && item.images[0] ? (
               <Image
                 src={item.images[0]}
                 alt={`${item.brand} ${item.name}`}
