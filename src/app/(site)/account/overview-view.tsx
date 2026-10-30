@@ -6,7 +6,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   BadgeCheck,
-  Bookmark,
   ChevronRight,
   Fingerprint,
   IdCard,
@@ -51,7 +50,8 @@ const QUICK_LINKS = [
   { href: "/account/verify", label: "Verify identity", icon: Fingerprint },
 ] as const;
 
-const cardShell = "rounded-2xl border border-line bg-elevated/50 p-5 sm:p-6";
+// min-w-0 keeps every card shrinkable inside responsive grid tracks
+const cardShell = "min-w-0 rounded-2xl border border-line bg-elevated/50 p-5 sm:p-6";
 
 const emptySubscribe = () => () => {};
 
@@ -149,24 +149,25 @@ export function OverviewView() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* grid-cols-1 (minmax(0,1fr)) — a bare auto track would let the
+          Recent orders card's nowrap content widen the page on mobile. */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* Profile summary */}
         <section className={cardShell} aria-labelledby="overview-profile-heading">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <span
-                aria-hidden="true"
-                className="flex size-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-glow to-ice font-display text-base font-bold text-[#0b0713]"
-              >
-                {user.initials}
-              </span>
-              <div className="min-w-0">
-                <h3 id="overview-profile-heading" className="font-display text-[1.02rem] font-semibold text-foreground">
-                  {user.displayName}
-                </h3>
-                <p className="mt-0.5 truncate text-[0.82rem] text-muted-foreground">{user.email}</p>
-                <p className="mt-0.5 text-[0.78rem] text-muted-foreground">Member since {formatDate(user.joinedAt)}</p>
-              </div>
+          <h3 id="overview-profile-heading" className="font-display text-[1.02rem] font-semibold text-foreground">
+            Profile
+          </h3>
+          <div className="mt-4 flex items-center gap-3.5">
+            <span
+              aria-hidden="true"
+              className="flex size-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-glow to-ice font-display text-base font-bold text-[#0b0713]"
+            >
+              {user.initials}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate font-display text-[0.95rem] font-semibold text-foreground">{user.displayName}</p>
+              <p className="mt-0.5 truncate text-[0.82rem] text-muted-foreground">{user.email}</p>
+              <p className="mt-0.5 text-[0.78rem] text-muted-foreground">Member since {formatDate(user.joinedAt)}</p>
             </div>
           </div>
           <Link
@@ -211,14 +212,9 @@ export function OverviewView() {
 
         {/* Saved items */}
         <section className={cardShell} aria-labelledby="overview-saved-heading">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-xl border border-line bg-foreground/[0.04] text-violet-soft">
-              <Bookmark className="size-5" aria-hidden="true" />
-            </span>
-            <h3 id="overview-saved-heading" className="font-display text-[1.02rem] font-semibold text-foreground">
-              Saved items
-            </h3>
-          </div>
+          <h3 id="overview-saved-heading" className="font-display text-[1.02rem] font-semibold text-foreground">
+            Saved items
+          </h3>
           <p className="mt-4 font-display text-3xl font-bold text-foreground">{savedItems.length}</p>
           <p className="mt-1 text-[0.78rem] text-muted-foreground">
             Synced to your account — the same list follows you on every signed-in device.
@@ -279,7 +275,7 @@ export function OverviewView() {
                       href={`/account/orders/${order.reference}`}
                       className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-violet-glow/40 hover:bg-foreground/[0.03]"
                     >
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="truncate font-mono text-[0.82rem] text-foreground">{order.reference}</p>
                         <p
                           className="mt-0.5 truncate text-[0.75rem] text-muted-foreground"

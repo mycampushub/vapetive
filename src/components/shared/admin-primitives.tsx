@@ -355,11 +355,11 @@ export function AuditLogList({ events }: { events: AuditEvent[] }) {
           />
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className={cn("text-[0.7rem] font-semibold uppercase tracking-[0.14em]", SEVERITY_TONE[event.severity])}>{event.severity}</span>
-            <code className="rounded bg-foreground/[0.05] px-1.5 py-0.5 font-mono text-[0.74rem] text-foreground">{event.action}</code>
-            <span className="text-sm text-muted-foreground">{event.target}</span>
+            <code className="min-w-0 break-all rounded bg-foreground/[0.05] px-1.5 py-0.5 font-mono text-[0.74rem] text-foreground">{event.action}</code>
+            <span className="min-w-0 break-all text-sm text-muted-foreground">{event.target}</span>
           </div>
           <p className="mt-1 text-[0.82rem] leading-relaxed text-muted-foreground">{event.detail}</p>
-          <p className="mt-1 font-mono text-[0.7rem] text-muted-foreground/70">
+          <p className="mt-1 break-all font-mono text-[0.7rem] text-muted-foreground/70">
             {formatDateTime(event.at)} · {event.actor}
             {event.ip ? ` · ${event.ip}` : ""}
           </p>
