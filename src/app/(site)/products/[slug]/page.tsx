@@ -81,6 +81,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
     {
       id: "specifications",
       title: "Specifications",
+      // On mobile the spec sheet is already expanded inline above the
+      // price, so the collapsed accordion copy would only duplicate it.
+      className: item.specs.length > 0 ? "hidden lg:block" : undefined,
       content: <SpecificationList groups={item.specs} />,
     },
     ...(item.faqs?.length
@@ -147,6 +150,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <h1 className="text-h1 font-bold">{item.name}</h1>
             <p className="text-lead text-muted-foreground">{item.tagline}</p>
 
+            {/* Mobile only — the full spec sheet is expanded inline here,
+                just before the price. On desktop specs live in the
+                "Product details" accordion below (panel stays lg+ only). */}
+            {item.specs.length > 0 && (
+              <section
+                aria-labelledby="mobile-specs-heading"
+                className="scroll-mt-24 lg:hidden"
+              >
+                <h2
+                  id="mobile-specs-heading"
+                  className="text-label font-semibold uppercase tracking-[0.18em] text-violet-soft"
+                >
+                  Specifications
+                </h2>
+                <div className="pt-3">
+                  <SpecificationList groups={item.specs} />
+                </div>
+              </section>
+            )}
+
             {/* Price — formatted AED with optional strikethrough "was" price */}
             <div className="flex flex-wrap items-baseline gap-3" aria-label={`Price ${formatAED(item.price)}`}>
               <span className="font-display text-3xl font-bold tracking-tight text-foreground">
@@ -200,11 +223,19 @@ export default async function ProductPage({ params }: ProductPageProps) {
             Product details
           </h2>
           <p className="max-w-2xl pt-3 text-muted-foreground">
-            The full listing for {item.name} — description, technical specifications and buying information. Expand a
-            panel to read it.
+            The full listing for {item.name} — description, technical specifications and buying information.
+            Description and specifications are expanded by default; toggle any panel as you like.
           </p>
           <div className="pt-6">
-            <InformationAccordion panels={panels} defaultOpen="description" />
+            {/* Description + specifications start expanded (desktop accordion;
+                on mobile the spec sheet is already inline above the price). */}
+            <InformationAccordion
+              panels={panels}
+              defaultOpen={[
+                "description",
+                ...(item.specs.length > 0 ? ["specifications"] : []),
+              ]}
+            />
           </div>
         </section>
 
