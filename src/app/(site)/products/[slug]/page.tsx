@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { TriangleAlert } from "lucide-react";
 import { PageContainer } from "@/components/layout/page-container";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/layout/breadcrumbs";
 import { ItemGallery } from "@/components/shared/item-gallery";
@@ -202,12 +201,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
               {item.nicotineStrength && (
                 <span className="inline-flex items-center rounded-full border border-line px-2.5 py-1 text-[0.72rem] font-medium tracking-wide text-muted-foreground">
                   {item.nicotineStrength}
-                </span>
-              )}
-              {item.ageRestricted && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 px-2.5 py-1 text-[0.72rem] font-medium tracking-wide text-warning">
-                  <TriangleAlert className="size-3.5" aria-hidden="true" />
-                  18+ · Adults only
                 </span>
               )}
               <ProductSaveButton itemId={item.id} name={item.name} />
