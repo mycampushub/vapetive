@@ -5,6 +5,23 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   reactStrictMode: true,
+  /**
+   * Image optimization MUST stay off for this deployment target.
+   *
+   * On Cloudflare Workers (OpenNext) `/_next/image` can serve build-time
+   * static assets, but its upstream self-fetch of DYNAMIC routes (the media
+   * API at /api/v1/media/*) fails — a Worker cannot subrequest its own
+   * hostname — and the optimizer answers 404 "upstream response is
+   * invalid". Admin-uploaded product photos therefore rendered as
+   * "Image unavailable" for visitors while the admin library (which
+   * bypasses the optimizer) showed them fine.
+   *
+   * The optimizer was pass-through-only on Workers anyway (original bytes
+   * were served un-re-encoded), so nothing is lost: every media URL is
+   * verified to serve directly (R2 binding / media_blobs fallback /
+   * static assets) and Cloudflare's CDN still caches responses.
+   */
+  images: { unoptimized: true },
   experimental: {
     // Tree-shake barrel imports (lucide-react is imported across many
     // islands) — smaller client bundles, faster first paint.
